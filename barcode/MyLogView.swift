@@ -1,0 +1,870 @@
+//
+//  MyLogView.swift
+//  barcode
+//
+//  Created by Burke Butler on 11/18/25.
+//
+
+import SwiftUI
+
+enum LogViewMode: String, CaseIterable {
+    case byVenue = "By Venue"
+    case timeline = "Timeline"
+}
+
+struct MyLogView: View {
+    @EnvironmentObject var dataStore: DataStore
+    @EnvironmentObject var coordinator: AppCoordinator
+    @StateObject private var postsManager = PostsManager()
+    @StateObject private var venuesManager = VenuesManager()
+    @State private var viewMode: LogViewMode = .byVenue
+    @State private var showingAddSheet = false
+    @State private var searchText = ""
+    @State private var selectedCategory: DrinkCategory? = nil // nil = "All"
+    @FocusState private var isSearchFocused: Bool
+    @State private var preselectedVenue: Venue?
+    @State private var preselectedDiscoveredVenue: DiscoveredVenue?
+
+    // Convert PostResponse to Rating for display
+    func toRating(_ post: PostResponse) -> Rating? {
+        guard let venueUUID = UUID(uuidString: post.venueId),
+              let userUUID = UUID(uuidString: post.userId),
+              let postUUID = UUID(uuidString: post.id),
+              let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
+            return nil
+        }
+
+        let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
+
+        // Convert wine details
+        var wineDetails: WineDetails? = nil
+        if let wd = post.wineDetails {
+            print("DEBUG: Wine details from API - wineStyle: \(wd.wineStyle ?? "nil"), sweetness: \(wd.sweetness ?? "nil"), body: \(wd.body ?? "nil"), tannin: \(wd.tannin ?? "nil"), acidity: \(wd.acidity ?? "nil")")
+            wineDetails = WineDetails(
+                varietal: nil,
+                region: nil,
+                vintage: nil,
+                style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
+                sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
+                body: wd.body.flatMap { WineBody(rawValue: $0) },
+                tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
+                acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
+                winery: nil
+            )
+            print("DEBUG: Converted wine details - style: \(wineDetails?.style?.rawValue ?? "nil"), sweetness: \(wineDetails?.sweetness?.rawValue ?? "nil")")
+        } else {
+            print("DEBUG: post.wineDetails is nil for post category: \(post.drinkCategory)")
+        }
+
+        // Convert beer details
+        var beerDetails: BeerDetails? = nil
+        if let bd = post.beerDetails {
+            beerDetails = BeerDetails(
+                style: bd.beerStyle.flatMap { BeerStyle(rawValue: $0) },
+                brewery: bd.brewery,
+                abv: bd.abv.map { String($0) },
+                ibu: bd.ibu.map { String($0) },
+                servingType: bd.serving.flatMap { ServingType(rawValue: $0) },
+                bitterness: nil,
+                hoppiness: nil,
+                maltiness: nil,
+                mouthfeel: nil
+            )
+        }
+
+        // Convert cocktail details
+        var cocktailDetails: CocktailDetails? = nil
+        if let cd = post.cocktailDetails {
+            cocktailDetails = CocktailDetails(
+                baseSpirit: cd.baseSpirit.flatMap { BaseSpirit(rawValue: $0) },
+                cocktailFamily: cd.cocktailFamily.flatMap { CocktailFamily(rawValue: $0) },
+                preparationStyle: cd.preparation.flatMap { PreparationStyle(rawValue: $0) },
+                glassType: nil,
+                garnish: cd.garnish,
+                sweetness: cd.sweetness.flatMap { BalanceLevel(rawValue: $0) },
+                booziness: cd.booziness.flatMap { BalanceLevel(rawValue: $0) },
+                balance: cd.balance.flatMap { BalanceLevel(rawValue: $0) },
+                recipeNotes: nil
+            )
+        }
+
+        return Rating(
+            id: postUUID,
+            venueId: venueUUID,
+            drinkName: post.drinkName,
+            category: category,
+            stars: Int(post.stars),
+            notes: post.notes,
+            dateLogged: createdDate,
+            photoNames: [],
+            tags: [],
+            wineDetails: wineDetails,
+            beerDetails: beerDetails,
+            cocktailDetails: cocktailDetails
+        )
+    }
+
+    var filteredPosts: [PostResponse] {
+        var posts = postsManager.posts
+
+        // Apply category filter
+        if let category = selectedCategory {
+            posts = posts.filter { $0.drinkCategory == category.rawValue }
+        }
+
+        // Apply search filter
+        if !searchText.isEmpty {
+            posts = posts.filter { post in
+                post.drinkName.localizedCaseInsensitiveContains(searchText) ||
+                post.notes.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+
+        return posts
+    }
+
+    var venuesWithRatings: [UUID] {
+        // Get unique venue IDs from filtered posts
+        let venueIds = Set(filteredPosts.compactMap { UUID(uuidString: $0.venueId) })
+
+        // Sort by most recent post
+        return venueIds.sorted { venueId1, venueId2 in
+            let posts1 = filteredPosts.filter { $0.venueId == venueId1.uuidString }
+            let posts2 = filteredPosts.filter { $0.venueId == venueId2.uuidString }
+
+            guard let date1Str = posts1.first?.createdAt,
+                  let date2Str = posts2.first?.createdAt,
+                  let date1 = ISO8601DateFormatter().date(from: date1Str),
+                  let date2 = ISO8601DateFormatter().date(from: date2Str) else {
+                return false
+            }
+            return date1 > date2
+        }
+    }
+
+    func getRatingsForVenue(_ venue: Venue) -> [Rating] {
+        postsManager.posts
+            .filter { $0.venueId == venue.id.uuidString }
+            .compactMap { toRating($0) }
+            .sorted { $0.dateLogged > $1.dateLogged }
+    }
+
+    var allRatingsTimeline: [Rating] {
+        // Use filteredPosts which already applies both category and search filters
+        filteredPosts
+            .compactMap { toRating($0) }
+            .sorted { $0.dateLogged > $1.dateLogged }
+    }
+
+    var totalVenues: Int {
+        venuesWithRatings.count
+    }
+
+    var averageRating: Double {
+        guard !filteredPosts.isEmpty else { return 0 }
+        let sum = filteredPosts.reduce(0) { $0 + Int($1.stars) }
+        return Double(sum) / Double(filteredPosts.count)
+    }
+
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 0) {
+                // Modern Header with Search
+                VStack(spacing: 14) {
+                    // Row 1: Search bar and add button
+                    HStack(spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+
+                            TextField("Search drinks, venues...", text: $searchText)
+                                .textFieldStyle(PlainTextFieldStyle())
+                                .font(.system(size: 16))
+                                .focused($isSearchFocused)
+
+                            if !searchText.isEmpty {
+                                Button(action: {
+                                    searchText = ""
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+
+                        Button(action: { showingAddSheet = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.blue)
+                        }
+                    }
+
+                    // Row 2: Category filter chips
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            FilterChip(
+                                title: "All",
+                                icon: "line.3.horizontal.decrease.circle",
+                                isSelected: selectedCategory == nil,
+                                action: { selectedCategory = nil }
+                            )
+
+                            FilterChip(
+                                title: "Wine",
+                                icon: "wineglass",
+                                isSelected: selectedCategory == .wine,
+                                action: { selectedCategory = .wine }
+                            )
+
+                            FilterChip(
+                                title: "Beer",
+                                icon: "mug",
+                                isSelected: selectedCategory == .beer,
+                                action: { selectedCategory = .beer }
+                            )
+
+                            FilterChip(
+                                title: "Cocktails",
+                                icon: "mug",
+                                isSelected: selectedCategory == .cocktail,
+                                action: { selectedCategory = .cocktail }
+                            )
+                        }
+                    }
+
+                    // Row 3: Quick stats (filtered)
+                    HStack(spacing: 20) {
+                        StatPill(value: "\(filteredPosts.count)", label: "drinks")
+                        StatPill(value: "\(totalVenues)", label: "venues")
+                        StatPill(value: String(format: "%.1f", averageRating), label: "avg rating")
+
+                        Spacer()
+                    }
+
+                    // Row 4: View mode toggle (de-emphasized)
+                    Picker("View Mode", selection: $viewMode) {
+                        ForEach(LogViewMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
+
+                // Content based on view mode
+                if postsManager.posts.isEmpty {
+                    Spacer()
+                    VStack(spacing: 16) {
+                        Image(systemName: "book.closed")
+                            .font(.system(size: 64))
+                            .foregroundColor(.secondary)
+
+                        Text("No ratings yet")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        Text("Start building your drink history")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+
+                        Button(action: { showingAddSheet = true }) {
+                            Text("Add Your First Drink")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .cornerRadius(12)
+                        }
+                        .padding(.top, 8)
+                    }
+                    Spacer()
+                } else {
+                    if viewMode == .byVenue {
+                        ByVenueView(postsManager: postsManager, venues: venuesWithRatings)
+                    } else {
+                        TimelineView(postsManager: postsManager, ratings: allRatingsTimeline)
+                    }
+                }
+            }
+            .navigationBarHidden(true)
+            .sheet(isPresented: $showingAddSheet) {
+                AddRatingSheet(initialVenue: preselectedVenue, discoveredVenue: preselectedDiscoveredVenue)
+                    .environmentObject(postsManager)
+            }
+            .task {
+                async let posts: () = postsManager.fetchPosts()
+                async let venues: () = venuesManager.fetchVenues()
+                await posts
+                await venues
+                // Update dataStore with fetched venues
+                dataStore.venues = venuesManager.venues.map { venuesManager.toVenue($0) }
+            }
+            .refreshable {
+                async let posts: () = postsManager.fetchPosts()
+                async let venues: () = venuesManager.fetchVenues()
+                await posts
+                await venues
+                dataStore.venues = venuesManager.venues.map { venuesManager.toVenue($0) }
+            }
+            .onChange(of: coordinator.shouldOpenAddRating) { shouldOpen in
+                if shouldOpen {
+                    preselectedVenue = coordinator.preselectedVenue
+                    preselectedDiscoveredVenue = coordinator.preselectedVenueFromDiscovery
+                    showingAddSheet = true
+                    // Delay resetting to ensure sheet has time to present
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        coordinator.resetAddRatingState()
+                    }
+                }
+            }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+}
+
+// MARK: - Supporting Views
+
+struct StatPill: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+            Text(label)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+struct ByVenueView: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+    let venues: [UUID]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                ForEach(venues, id: \.self) { venueId in
+                    VenueLogCardById(postsManager: postsManager, venueId: venueId)
+                        .environmentObject(dataStore)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+    }
+}
+
+struct TimelineView: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+
+    let ratings: [Rating]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(ratings) { rating in
+                    if let venue = dataStore.getVenue(for: rating.venueId) {
+                        NavigationLink(destination: RatingDetailView(rating: rating, venue: venue)
+                            .environmentObject(postsManager)) {
+                            TimelineRatingCard(rating: rating, venue: venue)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+    }
+}
+
+struct VenueLogCardById: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+    let venueId: UUID
+
+    // Get venue name from first post for this venue
+    var venueName: String {
+        // Try to find venue in dataStore first
+        if let venue = dataStore.venues.first(where: { $0.id == venueId }) {
+            return venue.name
+        }
+        // Fallback to showing venue ID
+        return "Unknown Venue"
+    }
+
+    var venue: Venue? {
+        dataStore.venues.first(where: { $0.id == venueId })
+    }
+
+    var body: some View {
+        if let venue = venue {
+            VenueLogCard(postsManager: postsManager, venue: venue)
+        } else {
+            // Show posts even if venue isn't loaded
+            VenueLogCardSimple(postsManager: postsManager, venueId: venueId, venueName: venueName)
+        }
+    }
+}
+
+struct VenueLogCardSimple: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+    let venueId: UUID
+    let venueName: String
+
+    func toRating(_ post: PostResponse) -> Rating? {
+        guard let venueUUID = UUID(uuidString: post.venueId),
+              let userUUID = UUID(uuidString: post.userId),
+              let postUUID = UUID(uuidString: post.id),
+              let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
+            return nil
+        }
+
+        let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
+
+        // Convert details
+        var wineDetails: WineDetails? = nil
+        if let wd = post.wineDetails {
+            wineDetails = WineDetails(
+                varietal: nil,
+                region: nil,
+                vintage: nil,
+                style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
+                sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
+                body: wd.body.flatMap { WineBody(rawValue: $0) },
+                tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
+                acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
+                winery: nil
+            )
+        }
+
+        var beerDetails: BeerDetails? = nil
+        if let bd = post.beerDetails {
+            beerDetails = BeerDetails(
+                style: bd.beerStyle.flatMap { BeerStyle(rawValue: $0) },
+                brewery: bd.brewery,
+                abv: bd.abv.map { String($0) },
+                ibu: bd.ibu.map { String($0) },
+                servingType: bd.serving.flatMap { ServingType(rawValue: $0) },
+                bitterness: nil,
+                hoppiness: nil,
+                maltiness: nil,
+                mouthfeel: nil
+            )
+        }
+
+        var cocktailDetails: CocktailDetails? = nil
+        if let cd = post.cocktailDetails {
+            cocktailDetails = CocktailDetails(
+                baseSpirit: cd.baseSpirit.flatMap { BaseSpirit(rawValue: $0) },
+                cocktailFamily: cd.cocktailFamily.flatMap { CocktailFamily(rawValue: $0) },
+                preparationStyle: cd.preparation.flatMap { PreparationStyle(rawValue: $0) },
+                glassType: nil,
+                garnish: cd.garnish,
+                sweetness: cd.sweetness.flatMap { BalanceLevel(rawValue: $0) },
+                booziness: cd.booziness.flatMap { BalanceLevel(rawValue: $0) },
+                balance: cd.balance.flatMap { BalanceLevel(rawValue: $0) },
+                recipeNotes: nil
+            )
+        }
+
+        return Rating(
+            id: postUUID,
+            venueId: venueUUID,
+            drinkName: post.drinkName,
+            category: category,
+            stars: Int(post.stars),
+            notes: post.notes,
+            dateLogged: createdDate,
+            photoNames: [],
+            tags: [],
+            wineDetails: wineDetails,
+            beerDetails: beerDetails,
+            cocktailDetails: cocktailDetails
+        )
+    }
+
+    var ratings: [Rating] {
+        postsManager.posts
+            .filter { $0.venueId == venueId.uuidString }
+            .compactMap { toRating($0) }
+            .sorted { $0.dateLogged > $1.dateLogged }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Compact venue header
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(.gray)
+                    )
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(venueName)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    HStack(spacing: 6) {
+                        Text("Venue")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+
+                        if ratings.count > 0 {
+                            Text("•")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+
+                            Text("\(ratings.count) drink\(ratings.count == 1 ? "" : "s")")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color(.systemBackground))
+
+            // Ratings list
+            VStack(spacing: 8) {
+                ForEach(ratings) { rating in
+                    let fallbackVenue = Venue(
+                        id: venueId,
+                        name: venueName,
+                        type: .bar,
+                        city: "",
+                        imageURL: nil
+                    )
+                    let displayVenue = dataStore.venues.first(where: { $0.id == venueId }) ?? fallbackVenue
+
+                    NavigationLink(destination: RatingDetailView(rating: rating, venue: displayVenue)
+                        .environmentObject(postsManager)) {
+                        CompactRatingRow(rating: rating)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .background(Color(.systemBackground))
+        }
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+}
+
+struct VenueLogCard: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+    let venue: Venue
+
+    func toRating(_ post: PostResponse) -> Rating? {
+        guard let venueUUID = UUID(uuidString: post.venueId),
+              let userUUID = UUID(uuidString: post.userId),
+              let postUUID = UUID(uuidString: post.id),
+              let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
+            return nil
+        }
+
+        let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
+
+        // Convert details
+        var wineDetails: WineDetails? = nil
+        if let wd = post.wineDetails {
+            wineDetails = WineDetails(
+                varietal: nil,
+                region: nil,
+                vintage: nil,
+                style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
+                sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
+                body: wd.body.flatMap { WineBody(rawValue: $0) },
+                tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
+                acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
+                winery: nil
+            )
+        }
+
+        var beerDetails: BeerDetails? = nil
+        if let bd = post.beerDetails {
+            beerDetails = BeerDetails(
+                style: bd.beerStyle.flatMap { BeerStyle(rawValue: $0) },
+                brewery: bd.brewery,
+                abv: bd.abv.map { String($0) },
+                ibu: bd.ibu.map { String($0) },
+                servingType: bd.serving.flatMap { ServingType(rawValue: $0) },
+                bitterness: nil,
+                hoppiness: nil,
+                maltiness: nil,
+                mouthfeel: nil
+            )
+        }
+
+        var cocktailDetails: CocktailDetails? = nil
+        if let cd = post.cocktailDetails {
+            cocktailDetails = CocktailDetails(
+                baseSpirit: cd.baseSpirit.flatMap { BaseSpirit(rawValue: $0) },
+                cocktailFamily: cd.cocktailFamily.flatMap { CocktailFamily(rawValue: $0) },
+                preparationStyle: cd.preparation.flatMap { PreparationStyle(rawValue: $0) },
+                glassType: nil,
+                garnish: cd.garnish,
+                sweetness: cd.sweetness.flatMap { BalanceLevel(rawValue: $0) },
+                booziness: cd.booziness.flatMap { BalanceLevel(rawValue: $0) },
+                balance: cd.balance.flatMap { BalanceLevel(rawValue: $0) },
+                recipeNotes: nil
+            )
+        }
+
+        return Rating(
+            id: postUUID,
+            venueId: venueUUID,
+            drinkName: post.drinkName,
+            category: category,
+            stars: Int(post.stars),
+            notes: post.notes,
+            dateLogged: createdDate,
+            photoNames: [],
+            tags: [],
+            wineDetails: wineDetails,
+            beerDetails: beerDetails,
+            cocktailDetails: cocktailDetails
+        )
+    }
+
+    var ratings: [Rating] {
+        postsManager.posts
+            .filter { $0.venueId == venue.id.uuidString }
+            .compactMap { toRating($0) }
+            .sorted { $0.dateLogged > $1.dateLogged }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Compact venue header
+            HStack(spacing: 10) {
+                // Venue image thumbnail
+                if let imageURL = venue.imageURL {
+                    AsyncImage(url: URL(string: imageURL)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        default:
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 60, height: 60)
+                        }
+                    }
+                } else {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.2))
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.gray)
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(venue.name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    HStack(spacing: 6) {
+                        Text(venue.type.rawValue)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+
+                        if ratings.count > 0 {
+                            Text("•")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+
+                            Text("\(ratings.count) drink\(ratings.count == 1 ? "" : "s")")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(Color(.systemBackground))
+
+            // Ratings list
+            VStack(spacing: 8) {
+                ForEach(ratings) { rating in
+                    NavigationLink(destination: RatingDetailView(rating: rating, venue: venue)
+                        .environmentObject(postsManager)) {
+                        CompactRatingRow(rating: rating)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .background(Color(.systemBackground))
+        }
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+}
+
+struct CompactRatingRow: View {
+    let rating: Rating
+
+    var categoryColor: Color {
+        switch rating.category {
+        case .beer: return .orange
+        case .wine: return .purple
+        case .cocktail: return .blue
+        case .other: return .gray
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Small category indicator
+            Circle()
+                .fill(categoryColor)
+                .frame(width: 8, height: 8)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(rating.drinkName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.primary)
+
+                HStack(spacing: 6) {
+                    StarRatingView(rating: rating.stars, size: 12)
+
+                    Text("•")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+
+                    Text(rating.relativeTime)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(.tertiaryLabel))
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
+    }
+}
+
+struct TimelineRatingCard: View {
+    let rating: Rating
+    let venue: Venue
+
+    var categoryColor: Color {
+        switch rating.category {
+        case .beer: return .orange
+        case .wine: return .purple
+        case .cocktail: return .blue
+        case .other: return .gray
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Photo or placeholder
+            if let photoName = rating.photoNames.first {
+                Image(photoName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(categoryColor.opacity(0.15))
+                    .frame(width: 80, height: 80)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(rating.drinkName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+
+                HStack(spacing: 6) {
+                    StarRatingView(rating: rating.stars, size: 14)
+
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    Text(rating.category.rawValue)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(categoryColor)
+                }
+
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    Text(venue.name)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+
+                Text(rating.relativeTime)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(.tertiaryLabel))
+        }
+        .padding(12)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+}
+
