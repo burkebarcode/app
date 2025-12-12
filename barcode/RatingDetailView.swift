@@ -14,6 +14,7 @@ struct RatingDetailView: View {
     @EnvironmentObject var postsManager: PostsManager
     @State private var showDeleteAlert = false
     @State private var showEditSheet = false
+    @State private var detailsExpanded = true
 
     var categoryColor: Color {
         switch rating.category {
@@ -24,56 +25,74 @@ struct RatingDetailView: View {
         }
     }
 
+    var categoryIcon: String {
+        switch rating.category {
+        case .wine: return "wineglass.fill"
+        case .beer: return "mug.fill"
+        case .cocktail: return "cup.and.saucer.fill"
+        case .other: return "circle.fill"
+        }
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 20) {
 
-                // MARK: - Title Section Card
-                VStack(alignment: .leading, spacing: 10) {
-                    // Drink name
-                    Text(rating.drinkName)
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(.primary)
-
-                    // Category badge and stars
-                    HStack(spacing: 10) {
-                        Text(rating.category.rawValue)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(categoryColor)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(categoryColor.opacity(0.15))
-                            .cornerRadius(6)
-
-                        StarRatingView(rating: rating.stars, size: 16)
-
+                // MARK: - Title Section
+                VStack(alignment: .leading, spacing: 12) {
+                    // Date in top-right semantic position
+                    HStack {
                         Spacer()
-
                         Text(rating.dateLogged.formatted(date: .abbreviated, time: .omitted))
-                            .font(.system(size: 14))
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    // Drink name - larger, more prominent
+                    Text(rating.drinkName)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+
+                    // Category badge and stars - tighter spacing
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Image(systemName: categoryIcon)
+                                .font(.system(size: 11))
+                                .foregroundColor(categoryColor)
+                            Text(rating.category.rawValue.capitalized)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(categoryColor)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(categoryColor.opacity(0.12))
+                        .cornerRadius(8)
+
+                        StarRatingView(rating: rating.stars, size: 14)
+                    }
                 }
-                .padding(16)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
                 .background(Color(.systemBackground))
-                .cornerRadius(12)
+                .cornerRadius(16)
+                .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
-                // MARK: - Photo Section Card
+                // MARK: - Photo Section
                 if !rating.photoNames.isEmpty {
                     VStack(spacing: 12) {
-                        // Main photo
                         if let mainPhoto = rating.photoNames.first {
                             Image(mainPhoto)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(height: 280)
                                 .clipped()
-                                .cornerRadius(10)
+                                .cornerRadius(16)
                         }
 
-                        // Thumbnail gallery
                         if rating.photoNames.count > 1 {
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
@@ -82,9 +101,9 @@ struct RatingDetailView: View {
                                             .resizable()
                                             .aspectRatio(contentMode: .fill)
                                             .frame(width: 60, height: 60)
-                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
                                             .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
+                                                RoundedRectangle(cornerRadius: 8)
                                                     .stroke(photoName == rating.photoNames.first ? categoryColor : Color.clear, lineWidth: 2)
                                             )
                                     }
@@ -92,312 +111,339 @@ struct RatingDetailView: View {
                             }
                         }
                     }
-                    .padding(14)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Wine Details Card
+                // MARK: - Wine Details
                 if let wineDetails = rating.wineDetails {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Wine Details")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                detailsExpanded.toggle()
+                            }
+                        }) {
+                            HStack {
+                                Text("Wine Details")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: detailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
 
-                        VStack(spacing: 10) {
-                            if let style = wineDetails.style {
-                                DetailRow(label: "Style", value: style.rawValue)
-                            }
-                            if let sweetness = wineDetails.sweetness {
-                                DetailRow(label: "Sweetness", value: sweetness.rawValue)
-                            }
-                            if let body = wineDetails.body {
-                                DetailRow(label: "Body", value: body.rawValue)
-                            }
-                            if let tannin = wineDetails.tannin {
-                                DetailRow(label: "Tannin", value: tannin.rawValue)
-                            }
-                            if let acidity = wineDetails.acidity {
-                                DetailRow(label: "Acidity", value: acidity.rawValue)
-                            }
-                            if let varietal = wineDetails.varietal {
-                                DetailRow(label: "Varietal", value: varietal)
-                            }
-                            if let region = wineDetails.region {
-                                DetailRow(label: "Region", value: region)
-                            }
-                            if let vintage = wineDetails.vintage {
-                                DetailRow(label: "Vintage", value: vintage)
-                            }
-                            if let winery = wineDetails.winery {
-                                DetailRow(label: "Winery", value: winery)
+                        if detailsExpanded {
+                            VStack(spacing: 14) {
+                                if let style = wineDetails.style {
+                                    DetailRowModern(label: "Style", value: style.rawValue)
+                                }
+                                if let sweetness = wineDetails.sweetness {
+                                    VisualDetailRow(label: "Sweetness", level: sweetness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let body = wineDetails.body {
+                                    VisualDetailRow(label: "Body", level: body.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let tannin = wineDetails.tannin {
+                                    VisualDetailRow(label: "Tannin", level: tannin.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let acidity = wineDetails.acidity {
+                                    VisualDetailRow(label: "Acidity", level: acidity.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let varietal = wineDetails.varietal {
+                                    DetailRowModern(label: "Varietal", value: varietal)
+                                }
+                                if let region = wineDetails.region {
+                                    DetailRowModern(label: "Region", value: region)
+                                }
+                                if let vintage = wineDetails.vintage {
+                                    DetailRowModern(label: "Vintage", value: vintage)
+                                }
+                                if let winery = wineDetails.winery {
+                                    DetailRowModern(label: "Winery", value: winery)
+                                }
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Beer Details Card
+                // MARK: - Beer Details
                 if let beerDetails = rating.beerDetails {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Beer Details")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                detailsExpanded.toggle()
+                            }
+                        }) {
+                            HStack {
+                                Text("Beer Details")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: detailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
 
-                        VStack(spacing: 10) {
-                            if let style = beerDetails.style {
-                                DetailRow(label: "Style", value: style.rawValue)
-                            }
-                            if let brewery = beerDetails.brewery {
-                                DetailRow(label: "Brewery", value: brewery)
-                            }
-                            if let abv = beerDetails.abv {
-                                DetailRow(label: "ABV", value: abv + "%")
-                            }
-                            if let ibu = beerDetails.ibu {
-                                DetailRow(label: "IBU", value: ibu)
-                            }
-                            if let servingType = beerDetails.servingType {
-                                DetailRow(label: "Serving", value: servingType.rawValue)
-                            }
-                            if let bitterness = beerDetails.bitterness {
-                                DetailRow(label: "Bitterness", value: bitterness.rawValue)
-                            }
-                            if let hoppiness = beerDetails.hoppiness {
-                                DetailRow(label: "Hoppiness", value: hoppiness.rawValue)
-                            }
-                            if let maltiness = beerDetails.maltiness {
-                                DetailRow(label: "Maltiness", value: maltiness.rawValue)
-                            }
-                            if let mouthfeel = beerDetails.mouthfeel {
-                                DetailRow(label: "Mouthfeel", value: mouthfeel.rawValue)
+                        if detailsExpanded {
+                            VStack(spacing: 14) {
+                                if let style = beerDetails.style {
+                                    DetailRowModern(label: "Style", value: style.rawValue)
+                                }
+                                if let brewery = beerDetails.brewery {
+                                    DetailRowModern(label: "Brewery", value: brewery)
+                                }
+                                if let abv = beerDetails.abv {
+                                    DetailRowModern(label: "ABV", value: abv + "%")
+                                }
+                                if let ibu = beerDetails.ibu {
+                                    DetailRowModern(label: "IBU", value: ibu)
+                                }
+                                if let servingType = beerDetails.servingType {
+                                    DetailRowModern(label: "Serving", value: servingType.rawValue)
+                                }
+                                if let bitterness = beerDetails.bitterness {
+                                    VisualDetailRow(label: "Bitterness", level: bitterness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let hoppiness = beerDetails.hoppiness {
+                                    VisualDetailRow(label: "Hoppiness", level: hoppiness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let maltiness = beerDetails.maltiness {
+                                    VisualDetailRow(label: "Maltiness", level: maltiness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let mouthfeel = beerDetails.mouthfeel {
+                                    VisualDetailRow(label: "Mouthfeel", level: mouthfeel.rawValue, maxLevel: 5, color: categoryColor)
+                                }
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Cocktail Details Card
+                // MARK: - Cocktail Details
                 if let cocktailDetails = rating.cocktailDetails {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Cocktail Details")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3)) {
+                                detailsExpanded.toggle()
+                            }
+                        }) {
+                            HStack {
+                                Text("Cocktail Details")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Image(systemName: detailsExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
 
-                        VStack(spacing: 10) {
-                            if let baseSpirit = cocktailDetails.baseSpirit {
-                                DetailRow(label: "Base Spirit", value: baseSpirit.rawValue)
-                            }
-                            if let cocktailFamily = cocktailDetails.cocktailFamily {
-                                DetailRow(label: "Family", value: cocktailFamily.rawValue)
-                            }
-                            if let preparationStyle = cocktailDetails.preparationStyle {
-                                DetailRow(label: "Preparation", value: preparationStyle.rawValue)
-                            }
-                            if let glassType = cocktailDetails.glassType {
-                                DetailRow(label: "Glass", value: glassType.rawValue)
-                            }
-                            if let garnish = cocktailDetails.garnish {
-                                DetailRow(label: "Garnish", value: garnish)
-                            }
-                            if let sweetness = cocktailDetails.sweetness {
-                                DetailRow(label: "Sweetness", value: sweetness.rawValue)
-                            }
-                            if let booziness = cocktailDetails.booziness {
-                                DetailRow(label: "Booziness", value: booziness.rawValue)
-                            }
-                            if let balance = cocktailDetails.balance {
-                                DetailRow(label: "Balance", value: balance.rawValue)
-                            }
-                            if let recipeNotes = cocktailDetails.recipeNotes {
-                                DetailRow(label: "Recipe", value: recipeNotes)
+                        if detailsExpanded {
+                            VStack(spacing: 14) {
+                                if let baseSpirit = cocktailDetails.baseSpirit {
+                                    DetailRowModern(label: "Base Spirit", value: baseSpirit.rawValue)
+                                }
+                                if let cocktailFamily = cocktailDetails.cocktailFamily {
+                                    DetailRowModern(label: "Family", value: cocktailFamily.rawValue)
+                                }
+                                if let preparationStyle = cocktailDetails.preparationStyle {
+                                    DetailRowModern(label: "Preparation", value: preparationStyle.rawValue)
+                                }
+                                if let glassType = cocktailDetails.glassType {
+                                    DetailRowModern(label: "Glass", value: glassType.rawValue)
+                                }
+                                if let garnish = cocktailDetails.garnish {
+                                    DetailRowModern(label: "Garnish", value: garnish)
+                                }
+                                if let sweetness = cocktailDetails.sweetness {
+                                    VisualDetailRow(label: "Sweetness", level: sweetness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let booziness = cocktailDetails.booziness {
+                                    VisualDetailRow(label: "Booziness", level: booziness.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let balance = cocktailDetails.balance {
+                                    VisualDetailRow(label: "Balance", level: balance.rawValue, maxLevel: 5, color: categoryColor)
+                                }
+                                if let recipeNotes = cocktailDetails.recipeNotes {
+                                    DetailRowModern(label: "Recipe", value: recipeNotes)
+                                }
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Notes Card
+                // MARK: - Notes
                 if !rating.notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Notes")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.headline)
                             .foregroundColor(.primary)
 
                         Text(rating.notes)
-                            .font(.system(size: 15))
+                            .font(.body)
                             .foregroundColor(.secondary)
-                            .lineSpacing(3)
+                            .lineSpacing(4)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Venue Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Venue")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    Button(action: {
-                        // Navigate to venue detail
-                    }) {
-                        HStack(spacing: 12) {
-                            // Venue thumbnail
-                            if let imageURL = venue.imageURL {
-                                AsyncImage(url: URL(string: imageURL)) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 50, height: 50)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    default:
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.gray.opacity(0.2))
-                                            .frame(width: 50, height: 50)
-                                    }
-                                }
-                            } else {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.gray.opacity(0.2))
-                                    .frame(width: 50, height: 50)
-                                    .overlay(
-                                        Image(systemName: "mappin.circle.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(.gray)
-                                    )
-                            }
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(venue.name)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.primary)
-
-                                HStack(spacing: 4) {
-                                    Image(systemName: "mappin")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-
-                                    Text(venue.city)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
-
-                                    Text("•")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(.secondary)
-
-                                    Text(venue.type.rawValue)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.secondary)
+                // MARK: - Venue (List-style)
+                Button(action: {
+                    // Navigate to venue detail
+                }) {
+                    HStack(spacing: 12) {
+                        // Venue icon
+                        if let imageURL = venue.imageURL {
+                            AsyncImage(url: URL(string: imageURL)) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 44, height: 44)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                default:
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 44, height: 44)
+                                        .overlay(
+                                            Image(systemName: "mappin.circle.fill")
+                                                .font(.system(size: 18))
+                                                .foregroundColor(.secondary)
+                                        )
                                 }
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.secondary)
+                        } else {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color(.systemGray5))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.secondary)
+                                )
                         }
-                        .padding(12)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-                .padding(14)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .padding(.horizontal, 16)
 
-                // MARK: - Tags Card
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(venue.name)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+
+                            HStack(spacing: 4) {
+                                Text(venue.city)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Text("•")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                Text(venue.type.rawValue)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(Color(.tertiaryLabel))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // MARK: - Tags
                 if !rating.tags.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Tags")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.headline)
                             .foregroundColor(.primary)
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(rating.tags, id: \.self) { tag in
                                     Text(tag)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(categoryColor.opacity(0.15))
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(categoryColor.opacity(0.12))
                                         .foregroundColor(categoryColor)
                                         .cornerRadius(12)
                                 }
                             }
                         }
                     }
-                    .padding(14)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                     .background(Color(.systemBackground))
-                    .cornerRadius(12)
+                    .cornerRadius(16)
+                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Actions Card
-                VStack(spacing: 10) {
-                    Button(action: {
-                        showEditSheet = true
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 15, weight: .medium))
-                            Text("Edit Rating")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundColor(.blue)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-
-                    Button(action: {
-                        showDeleteAlert = true
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "trash")
-                                .font(.system(size: 15, weight: .medium))
-                            Text("Delete Rating")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                        .foregroundColor(.red)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.red.opacity(0.08))
-                        .cornerRadius(8)
-                    }
-                }
-                .padding(14)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                Spacer(minLength: 20)
             }
             .padding(.top, 8)
+            .padding(.bottom, 24)
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: {
+                        showEditSheet = true
+                    }) {
+                        Label("Edit", systemImage: "pencil")
+                    }
+
+                    Divider()
+
+                    Button(role: .destructive, action: {
+                        showDeleteAlert = true
+                    }) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.body)
+                        .foregroundColor(.primary)
+                }
+            }
+        }
         .sheet(isPresented: $showEditSheet) {
             EditRatingSheet(rating: rating, venue: venue)
                 .environmentObject(postsManager)
@@ -571,6 +617,66 @@ struct EditRatingSheet: View {
     }
 }
 
+// MARK: - Modern Detail Row (text-only attributes)
+struct DetailRowModern: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top) {
+            Text(label)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
+// MARK: - Visual Detail Row (with dots/progress indicator)
+struct VisualDetailRow: View {
+    let label: String
+    let level: String
+    let maxLevel: Int
+    let color: Color
+
+    private var levelValue: Int {
+        // Map level strings to numeric values
+        switch level.lowercased() {
+        case "low": return 1
+        case "medium-low", "medium low": return 2
+        case "medium": return 3
+        case "medium-high", "medium high": return 4
+        case "high": return 5
+        default: return 0
+        }
+    }
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            // Visual dots
+            HStack(spacing: 4) {
+                ForEach(1...maxLevel, id: \.self) { index in
+                    Circle()
+                        .fill(index <= levelValue ? color : Color(.systemGray5))
+                        .frame(width: 8, height: 8)
+                }
+            }
+        }
+    }
+}
+
+// Legacy DetailRow kept for compatibility
 struct DetailRow: View {
     let label: String
     let value: String
@@ -587,4 +693,3 @@ struct DetailRow: View {
         }
     }
 }
-

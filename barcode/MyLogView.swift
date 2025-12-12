@@ -569,6 +569,7 @@ struct VenueLogCardSimple: View {
                         CompactRatingRow(rating: rating)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal, 12)
@@ -733,6 +734,7 @@ struct VenueLogCard: View {
                         CompactRatingRow(rating: rating)
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal, 12)
