@@ -35,8 +35,8 @@ class PostsManager: ObservableObject {
         venueId: String? = nil,
         drinkName: String,
         drinkCategory: String,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
         cocktailDetails: CocktailDetailsRequest? = nil,
@@ -73,8 +73,8 @@ class PostsManager: ObservableObject {
     func updatePost(
         postId: String,
         drinkName: String,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
         cocktailDetails: CocktailDetailsRequest? = nil

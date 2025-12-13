@@ -33,7 +33,8 @@ struct DiscoveredVenueDetailView: View {
         }
 
         let total = venueReviews.count
-        let avgRating = Double(venueReviews.reduce(0) { $0 + Int($1.stars) }) / Double(total)
+        let reviewsWithRatings = venueReviews.compactMap { $0.stars }
+        let avgRating = reviewsWithRatings.isEmpty ? 0 : Double(reviewsWithRatings.reduce(0, +)) / Double(reviewsWithRatings.count)
         let wineCount = venueReviews.filter { $0.drinkCategory == "wine" }.count
         let beerCount = venueReviews.filter { $0.drinkCategory == "beer" }.count
         let cocktailCount = venueReviews.filter { $0.drinkCategory == "cocktail" }.count
@@ -413,11 +414,13 @@ struct ReviewCard: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.primary)
 
-                        HStack(spacing: 2) {
-                            ForEach(0..<Int(review.stars), id: \.self) { _ in
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.orange)
+                        if let stars = review.stars {
+                            HStack(spacing: 2) {
+                                ForEach(0..<stars, id: \.self) { _ in
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.orange)
+                                }
                             }
                         }
                     }
@@ -443,8 +446,8 @@ struct ReviewCard: View {
                     }
 
                     // Notes
-                    if !review.notes.isEmpty {
-                        Text(review.notes)
+                    if let notes = review.notes, !notes.isEmpty {
+                        Text(notes)
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                             .lineLimit(2)

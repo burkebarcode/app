@@ -71,8 +71,8 @@ struct UserResponse: Codable {
 class APIService {
     static let shared = APIService()
 
-    private let baseURL = "https://barcode-gateway.fly.dev"
-    //kprivate let baseURL = "http://localhost:9000"
+    //private let baseURL = "https://barcode-gateway.fly.dev"
+    private let baseURL = "http://localhost:9000"
     private let tokenManager = TokenManager.shared
     private var refreshTask: Task<Void, Never>?
 
@@ -308,8 +308,8 @@ class APIService {
         venueId: String? = nil,
         drinkName: String,
         drinkCategory: String,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
         cocktailDetails: CocktailDetailsRequest? = nil,
@@ -366,8 +366,8 @@ class APIService {
     func updatePost(
         postId: String,
         drinkName: String,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
         cocktailDetails: CocktailDetailsRequest? = nil
@@ -492,8 +492,8 @@ struct CreatePostRequest: Codable {
     let venueId: String?
     let drinkName: String
     let drinkCategory: String
-    let stars: Int
-    let notes: String
+    let stars: Int?
+    let notes: String?
     let beerDetails: BeerDetailsRequest?
     let wineDetails: WineDetailsRequest?
     let cocktailDetails: CocktailDetailsRequest?
@@ -531,8 +531,8 @@ struct VenueDetailsRequest: Codable {
 
 struct UpdatePostRequest: Codable {
     let drinkName: String
-    let stars: Int
-    let notes: String
+    let stars: Int?
+    let notes: String?
     let beerDetails: BeerDetailsRequest?
     let wineDetails: WineDetailsRequest?
     let cocktailDetails: CocktailDetailsRequest?
@@ -567,10 +567,14 @@ struct WineDetailsRequest: Codable {
     let tannin: String
     let acidity: String
     let wineStyle: String
+    let varietal: String
+    let region: String
+    let vintage: String
+    let winery: String
 
     enum CodingKeys: String, CodingKey {
-        case sweetness, body, tannin, acidity
-        case wineStyle = "wine_style"
+        case sweetness, body, tannin, acidity, varietal, region, vintage, winery
+        case wineStyle = "wineStyle"
     }
 }
 
@@ -595,11 +599,11 @@ struct CocktailDetailsRequest: Codable {
 struct PostResponse: Codable, Identifiable {
     let id: String
     let userId: String
-    let venueId: String
+    let venueId: String?
     let drinkName: String
     let drinkCategory: String
-    let stars: Int
-    let notes: String
+    let stars: Int?
+    let notes: String?
     let wineDetails: WineDetailsResponse?
     let beerDetails: BeerDetailsResponse?
     let cocktailDetails: CocktailDetailsResponse?
@@ -625,6 +629,10 @@ struct WineDetailsResponse: Codable {
     let tannin: String?
     let acidity: String?
     let wineStyle: String?
+    let varietal: String?
+    let region: String?
+    let vintage: String?
+    let winery: String?
 }
 
 struct BeerDetailsResponse: Codable {

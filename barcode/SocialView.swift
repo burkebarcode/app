@@ -14,9 +14,8 @@ struct SocialView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(dataStore.feedPosts) { post in
-                    if let user = dataStore.getUser(for: post.userId),
-                       let venue = dataStore.getVenue(for: post.venueId) {
-
+                    if let user = dataStore.getUser(for: post.userId) {
+                        let venue = post.venueId.flatMap { dataStore.getVenue(for: $0) }
                         SocialFeedCard(post: post, user: user, venue: venue)
                     }
                 }

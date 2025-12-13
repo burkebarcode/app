@@ -38,7 +38,6 @@ struct AddRatingSheet: View {
     }
 
     var canSave: Bool {
-        selectedVenue != nil &&
         !drinkName.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
@@ -214,8 +213,6 @@ struct AddRatingSheet: View {
     }
 
     func submitPost() async {
-        guard let venue = selectedVenue else { return }
-
         isSubmitting = true
 
         // Convert category-specific details to API format
@@ -239,7 +236,11 @@ struct AddRatingSheet: View {
                 body: wineDetails.body?.rawValue ?? "",
                 tannin: wineDetails.tannin?.rawValue ?? "",
                 acidity: wineDetails.acidity?.rawValue ?? "",
-                wineStyle: wineDetails.style?.rawValue ?? ""
+                wineStyle: wineDetails.style?.rawValue ?? "",
+                varietal: wineDetails.varietal ?? "",
+                region: wineDetails.region ?? "",
+                vintage: wineDetails.vintage ?? "",
+                winery: wineDetails.winery ?? ""
             )
         case .cocktail:
             cocktailDetailsReq = CocktailDetailsRequest(
@@ -278,7 +279,7 @@ struct AddRatingSheet: View {
         }
 
         let success = await postsManager.createPost(
-            venueId: discoveredVenue == nil ? venue.id.uuidString : nil,
+            venueId: discoveredVenue == nil ? selectedVenue?.id.uuidString : nil,
             drinkName: drinkName,
             drinkCategory: drinkCategory.rawValue,
             stars: rating,

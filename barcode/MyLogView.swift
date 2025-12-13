@@ -27,12 +27,14 @@ struct MyLogView: View {
 
     // Convert PostResponse to Rating for display
     func toRating(_ post: PostResponse) -> Rating? {
-        guard let venueUUID = UUID(uuidString: post.venueId),
-              let userUUID = UUID(uuidString: post.userId),
+        guard let userUUID = UUID(uuidString: post.userId),
               let postUUID = UUID(uuidString: post.id),
               let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
             return nil
         }
+
+        // Venue is now optional
+        let venueUUID = post.venueId.flatMap { UUID(uuidString: $0) }
 
         let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
 
@@ -41,15 +43,15 @@ struct MyLogView: View {
         if let wd = post.wineDetails {
             print("DEBUG: Wine details from API - wineStyle: \(wd.wineStyle ?? "nil"), sweetness: \(wd.sweetness ?? "nil"), body: \(wd.body ?? "nil"), tannin: \(wd.tannin ?? "nil"), acidity: \(wd.acidity ?? "nil")")
             wineDetails = WineDetails(
-                varietal: nil,
-                region: nil,
-                vintage: nil,
+                varietal: wd.varietal,
+                region: wd.region,
+                vintage: wd.vintage,
                 style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
                 sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
                 body: wd.body.flatMap { WineBody(rawValue: $0) },
                 tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
                 acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
-                winery: nil
+                winery: wd.winery
             )
             print("DEBUG: Converted wine details - style: \(wineDetails?.style?.rawValue ?? "nil"), sweetness: \(wineDetails?.sweetness?.rawValue ?? "nil")")
         } else {
@@ -93,7 +95,7 @@ struct MyLogView: View {
             venueId: venueUUID,
             drinkName: post.drinkName,
             category: category,
-            stars: Int(post.stars),
+            stars: post.stars,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -116,7 +118,7 @@ struct MyLogView: View {
         if !searchText.isEmpty {
             posts = posts.filter { post in
                 post.drinkName.localizedCaseInsensitiveContains(searchText) ||
-                post.notes.localizedCaseInsensitiveContains(searchText)
+                (post.notes?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
 
@@ -124,8 +126,10 @@ struct MyLogView: View {
     }
 
     var venuesWithRatings: [UUID] {
-        // Get unique venue IDs from filtered posts
-        let venueIds = Set(filteredPosts.compactMap { UUID(uuidString: $0.venueId) })
+        // Get unique venue IDs from filtered posts (excluding posts without venues)
+        let venueIds = Set(filteredPosts.compactMap { post in
+            post.venueId.flatMap { UUID(uuidString: $0) }
+        })
 
         // Sort by most recent post
         return venueIds.sorted { venueId1, venueId2 in
@@ -162,8 +166,10 @@ struct MyLogView: View {
 
     var averageRating: Double {
         guard !filteredPosts.isEmpty else { return 0 }
-        let sum = filteredPosts.reduce(0) { $0 + Int($1.stars) }
-        return Double(sum) / Double(filteredPosts.count)
+        let postsWithRatings = filteredPosts.compactMap { $0.stars }
+        guard !postsWithRatings.isEmpty else { return 0 }
+        let sum = postsWithRatings.reduce(0, +)
+        return Double(sum) / Double(postsWithRatings.count)
     }
 
     var body: some View {
@@ -379,13 +385,12 @@ struct TimelineView: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(ratings) { rating in
-                    if let venue = dataStore.getVenue(for: rating.venueId) {
-                        NavigationLink(destination: RatingDetailView(rating: rating, venue: venue)
-                            .environmentObject(postsManager)) {
-                            TimelineRatingCard(rating: rating, venue: venue)
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                    let venue = dataStore.getVenue(for: rating)
+                    NavigationLink(destination: RatingDetailView(rating: rating, venue: venue)
+                        .environmentObject(postsManager)) {
+                        TimelineRatingCard(rating: rating, venue: venue)
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 12)
@@ -431,12 +436,13 @@ struct VenueLogCardSimple: View {
     let venueName: String
 
     func toRating(_ post: PostResponse) -> Rating? {
-        guard let venueUUID = UUID(uuidString: post.venueId),
-              let userUUID = UUID(uuidString: post.userId),
+        guard let userUUID = UUID(uuidString: post.userId),
               let postUUID = UUID(uuidString: post.id),
               let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
             return nil
         }
+
+        let venueUUID = post.venueId.flatMap { UUID(uuidString: $0) }
 
         let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
 
@@ -444,15 +450,15 @@ struct VenueLogCardSimple: View {
         var wineDetails: WineDetails? = nil
         if let wd = post.wineDetails {
             wineDetails = WineDetails(
-                varietal: nil,
-                region: nil,
-                vintage: nil,
+                varietal: wd.varietal,
+                region: wd.region,
+                vintage: wd.vintage,
                 style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
                 sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
                 body: wd.body.flatMap { WineBody(rawValue: $0) },
                 tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
                 acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
-                winery: nil
+                winery: wd.winery
             )
         }
 
@@ -491,7 +497,7 @@ struct VenueLogCardSimple: View {
             venueId: venueUUID,
             drinkName: post.drinkName,
             category: category,
-            stars: Int(post.stars),
+            stars: post.stars,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -587,12 +593,13 @@ struct VenueLogCard: View {
     let venue: Venue
 
     func toRating(_ post: PostResponse) -> Rating? {
-        guard let venueUUID = UUID(uuidString: post.venueId),
-              let userUUID = UUID(uuidString: post.userId),
+        guard let userUUID = UUID(uuidString: post.userId),
               let postUUID = UUID(uuidString: post.id),
               let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
             return nil
         }
+
+        let venueUUID = post.venueId.flatMap { UUID(uuidString: $0) }
 
         let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
 
@@ -600,15 +607,15 @@ struct VenueLogCard: View {
         var wineDetails: WineDetails? = nil
         if let wd = post.wineDetails {
             wineDetails = WineDetails(
-                varietal: nil,
-                region: nil,
-                vintage: nil,
+                varietal: wd.varietal,
+                region: wd.region,
+                vintage: wd.vintage,
                 style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
                 sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
                 body: wd.body.flatMap { WineBody(rawValue: $0) },
                 tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
                 acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
-                winery: nil
+                winery: wd.winery
             )
         }
 
@@ -647,7 +654,7 @@ struct VenueLogCard: View {
             venueId: venueUUID,
             drinkName: post.drinkName,
             category: category,
-            stars: Int(post.stars),
+            stars: post.stars,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -771,7 +778,9 @@ struct CompactRatingRow: View {
                     .foregroundColor(.primary)
 
                 HStack(spacing: 6) {
-                    StarRatingView(rating: rating.stars, size: 12)
+                    if let stars = rating.stars {
+                        StarRatingView(rating: stars, size: 12)
+                    }
 
                     Text("•")
                         .font(.system(size: 10))
@@ -798,7 +807,7 @@ struct CompactRatingRow: View {
 
 struct TimelineRatingCard: View {
     let rating: Rating
-    let venue: Venue
+    let venue: Venue?
 
     var categoryColor: Color {
         switch rating.category {
@@ -830,7 +839,9 @@ struct TimelineRatingCard: View {
                     .foregroundColor(.primary)
 
                 HStack(spacing: 6) {
-                    StarRatingView(rating: rating.stars, size: 14)
+                    if let stars = rating.stars {
+                        StarRatingView(rating: stars, size: 14)
+                    }
 
                     Text("•")
                         .font(.system(size: 11))
@@ -841,15 +852,17 @@ struct TimelineRatingCard: View {
                         .foregroundColor(categoryColor)
                 }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                if let venue = venue {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
 
-                    Text(venue.name)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
+                        Text(venue.name)
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Text(rating.relativeTime)

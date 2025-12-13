@@ -9,7 +9,7 @@ import SwiftUI
 
 struct RatingDetailView: View {
     let rating: Rating
-    let venue: Venue
+    let venue: Venue?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var postsManager: PostsManager
     @State private var showDeleteAlert = false
@@ -70,7 +70,7 @@ struct RatingDetailView: View {
                         .background(categoryColor.opacity(0.12))
                         .cornerRadius(8)
 
-                        StarRatingView(rating: rating.stars, size: 14)
+                        StarRatingView(rating: rating.stars ?? 0, size: 14)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -292,13 +292,13 @@ struct RatingDetailView: View {
                 }
 
                 // MARK: - Notes
-                if !rating.notes.isEmpty {
+                if let notes = rating.notes, !notes.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Notes")
                             .font(.headline)
                             .foregroundColor(.primary)
 
-                        Text(rating.notes)
+                        Text(notes)
                             .font(.body)
                             .foregroundColor(.secondary)
                             .lineSpacing(4)
@@ -311,78 +311,80 @@ struct RatingDetailView: View {
                     .padding(.horizontal, 16)
                 }
 
-                // MARK: - Venue (List-style)
-                Button(action: {
-                    // Navigate to venue detail
-                }) {
-                    HStack(spacing: 12) {
-                        // Venue icon
-                        if let imageURL = venue.imageURL {
-                            AsyncImage(url: URL(string: imageURL)) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 44, height: 44)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                default:
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color(.systemGray5))
-                                        .frame(width: 44, height: 44)
-                                        .overlay(
-                                            Image(systemName: "mappin.circle.fill")
-                                                .font(.system(size: 18))
-                                                .foregroundColor(.secondary)
-                                        )
+                // MARK: - Venue (List-style, optional)
+                if let venue = venue {
+                    Button(action: {
+                        // Navigate to venue detail
+                    }) {
+                        HStack(spacing: 12) {
+                            // Venue icon
+                            if let imageURL = venue.imageURL {
+                                AsyncImage(url: URL(string: imageURL)) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 44, height: 44)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    default:
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color(.systemGray5))
+                                            .frame(width: 44, height: 44)
+                                            .overlay(
+                                                Image(systemName: "mappin.circle.fill")
+                                                    .font(.system(size: 18))
+                                                    .foregroundColor(.secondary)
+                                            )
+                                    }
+                                }
+                            } else {
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemGray5))
+                                    .frame(width: 44, height: 44)
+                                    .overlay(
+                                        Image(systemName: "mappin.circle.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(.secondary)
+                                    )
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(venue.name)
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.primary)
+
+                                HStack(spacing: 4) {
+                                    Text(venue.city)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Text("•")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+
+                                    Text(venue.type.rawValue)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
                             }
-                        } else {
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(Color(.systemGray5))
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Image(systemName: "mappin.circle.fill")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.secondary)
-                                )
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(Color(.tertiaryLabel))
                         }
-
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(venue.name)
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-
-                            HStack(spacing: 4) {
-                                Text(venue.city)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-
-                                Text("•")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-
-                                Text(venue.type.rawValue)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundColor(Color(.tertiaryLabel))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+                        .padding(.horizontal, 16)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(16)
-                    .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
-                    .padding(.horizontal, 16)
+                    .buttonStyle(PlainButtonStyle())
                 }
-                .buttonStyle(PlainButtonStyle())
 
                 // MARK: - Tags
                 if !rating.tags.isEmpty {
@@ -467,7 +469,7 @@ struct RatingDetailView: View {
 // MARK: - Edit Rating Sheet
 struct EditRatingSheet: View {
     let rating: Rating
-    let venue: Venue
+    let venue: Venue?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var postsManager: PostsManager
 
@@ -479,12 +481,12 @@ struct EditRatingSheet: View {
     @State private var cocktailDetails: CocktailDetails
     @State private var isSubmitting = false
 
-    init(rating: Rating, venue: Venue) {
+    init(rating: Rating, venue: Venue?) {
         self.rating = rating
         self.venue = venue
         _drinkName = State(initialValue: rating.drinkName)
-        _stars = State(initialValue: rating.stars)
-        _notes = State(initialValue: rating.notes)
+        _stars = State(initialValue: rating.stars ?? 3)
+        _notes = State(initialValue: rating.notes ?? "")
         _wineDetails = State(initialValue: rating.wineDetails ?? WineDetails(varietal: nil, region: nil, vintage: nil, style: nil, sweetness: nil, body: nil, tannin: nil, acidity: nil, winery: nil))
         _beerDetails = State(initialValue: rating.beerDetails ?? BeerDetails(style: nil, brewery: nil, abv: nil, ibu: nil, servingType: nil, bitterness: nil, hoppiness: nil, maltiness: nil, mouthfeel: nil))
         _cocktailDetails = State(initialValue: rating.cocktailDetails ?? CocktailDetails(baseSpirit: nil, cocktailFamily: nil, preparationStyle: nil, glassType: nil, garnish: nil, sweetness: nil, booziness: nil, balance: nil, recipeNotes: nil))
@@ -494,51 +496,54 @@ struct EditRatingSheet: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Drink Name
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Drink Name")
-                            .font(.system(size: 15, weight: .semibold))
-                        TextField("Drink name", text: $drinkName)
-                            .font(.system(size: 16))
-                            .padding(14)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(10)
+                    // Header
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Edit Rating")
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                    // Conditional Form based on category
+                    if rating.category == .wine {
+                        WineRatingForm(
+                            wineName: $drinkName,
+                            wineDetails: $wineDetails,
+                            rating: $stars,
+                            notes: $notes
+                        )
+                        .padding(.horizontal, 20)
+                    } else if rating.category == .beer {
+                        BeerRatingForm(
+                            beerName: $drinkName,
+                            beerDetails: $beerDetails,
+                            rating: $stars,
+                            notes: $notes
+                        )
+                        .padding(.horizontal, 20)
+                    } else if rating.category == .cocktail {
+                        CocktailRatingForm(
+                            cocktailName: $drinkName,
+                            cocktailDetails: $cocktailDetails,
+                            rating: $stars,
+                            notes: $notes
+                        )
+                        .padding(.horizontal, 20)
+                    } else {
+                        GenericDrinkForm(
+                            drinkName: $drinkName,
+                            rating: $stars,
+                            notes: $notes
+                        )
+                        .padding(.horizontal, 20)
                     }
 
-                    // Rating
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Rating")
-                            .font(.system(size: 15, weight: .semibold))
-                        HStack(spacing: 8) {
-                            ForEach(1...5, id: \.self) { star in
-                                Image(systemName: star <= stars ? "star.fill" : "star")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(star <= stars ? .yellow : .gray)
-                                    .onTapGesture {
-                                        stars = star
-                                    }
-                            }
-                        }
-                    }
-
-                    // Notes
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Notes")
-                            .font(.system(size: 15, weight: .semibold))
-                        TextEditor(text: $notes)
-                            .font(.system(size: 16))
-                            .frame(height: 100)
-                            .padding(8)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(10)
-                    }
-
-                    // Category-specific forms would go here
-                    // For now, keeping it simple
+                    Spacer(minLength: 80)
                 }
-                .padding()
+                .padding(.bottom, 80)
             }
-            .navigationTitle("Edit Rating")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -547,7 +552,7 @@ struct EditRatingSheet: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
+                    Button(isSubmitting ? "Saving..." : "Save") {
                         Task {
                             await saveChanges()
                         }
@@ -573,7 +578,11 @@ struct EditRatingSheet: View {
                 body: wineDetails.body?.rawValue ?? "",
                 tannin: wineDetails.tannin?.rawValue ?? "",
                 acidity: wineDetails.acidity?.rawValue ?? "",
-                wineStyle: wineDetails.style?.rawValue ?? ""
+                wineStyle: wineDetails.style?.rawValue ?? "",
+                varietal: wineDetails.varietal ?? "",
+                region: wineDetails.region ?? "",
+                vintage: wineDetails.vintage ?? "",
+                winery: wineDetails.winery ?? ""
             )
         case .beer:
             beerDetailsReq = BeerDetailsRequest(
@@ -599,11 +608,14 @@ struct EditRatingSheet: View {
             break
         }
 
+        // Convert empty notes to nil
+        let notesValue = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes
+
         let success = await postsManager.updatePost(
             postId: rating.id.uuidString,
             drinkName: drinkName,
             stars: stars,
-            notes: notes,
+            notes: notesValue,
             beerDetails: beerDetailsReq,
             wineDetails: wineDetailsReq,
             cocktailDetails: cocktailDetailsReq
@@ -612,7 +624,12 @@ struct EditRatingSheet: View {
         isSubmitting = false
 
         if success {
+            // Refresh the posts list to get the updated data
+            await postsManager.fetchPosts()
             dismiss()
+        } else {
+            // Show error message if failed
+            print("Failed to update post")
         }
     }
 }

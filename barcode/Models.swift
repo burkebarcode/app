@@ -44,11 +44,11 @@ struct Comment: Identifiable, Codable {
 struct FeedPost: Identifiable, Codable {
     let id: UUID
     var userId: UUID
-    var venueId: UUID
+    var venueId: UUID?
     var drinkName: String
     var category: DrinkCategory
-    var stars: Int
-    var notes: String
+    var stars: Int?
+    var notes: String?
     var photoURL: String?
     var datePosted: Date
     var likedBy: [UUID]
@@ -57,11 +57,11 @@ struct FeedPost: Identifiable, Codable {
     init(
         id: UUID = UUID(),
         userId: UUID,
-        venueId: UUID,
+        venueId: UUID? = nil,
         drinkName: String,
         category: DrinkCategory,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         photoURL: String? = nil,
         datePosted: Date = Date(),
         likedBy: [UUID] = [],
@@ -72,7 +72,7 @@ struct FeedPost: Identifiable, Codable {
         self.venueId = venueId
         self.drinkName = drinkName
         self.category = category
-        self.stars = min(max(stars, 1), 5)
+        self.stars = stars.map { min(max($0, 1), 5) }
         self.notes = notes
         self.photoURL = photoURL
         self.datePosted = datePosted
@@ -307,11 +307,11 @@ enum BalanceLevel: String, CaseIterable, Codable {
 
 struct Rating: Identifiable, Codable {
     let id: UUID
-    var venueId: UUID
+    var venueId: UUID?
     var drinkName: String
     var category: DrinkCategory
-    var stars: Int
-    var notes: String
+    var stars: Int?
+    var notes: String?
     var dateLogged: Date
 
     var photoNames: [String]
@@ -324,11 +324,11 @@ struct Rating: Identifiable, Codable {
 
     init(
         id: UUID = UUID(),
-        venueId: UUID,
+        venueId: UUID? = nil,
         drinkName: String,
         category: DrinkCategory,
-        stars: Int,
-        notes: String,
+        stars: Int? = nil,
+        notes: String? = nil,
         dateLogged: Date = Date(),
         photoNames: [String] = [],
         tags: [String] = [],
@@ -340,7 +340,7 @@ struct Rating: Identifiable, Codable {
         self.venueId = venueId
         self.drinkName = drinkName
         self.category = category
-        self.stars = min(max(stars, 1), 5)
+        self.stars = stars.map { min(max($0, 1), 5) }
         self.notes = notes
         self.dateLogged = dateLogged
         self.photoNames = photoNames

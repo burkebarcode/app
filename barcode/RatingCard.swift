@@ -57,7 +57,9 @@ struct RatingCard: View {
                 }
 
                 HStack(spacing: 8) {
-                    StarRatingView(rating: rating.stars, size: 16)
+                    if let stars = rating.stars {
+                        StarRatingView(rating: stars, size: 16)
+                    }
 
                     Text("•")
                         .font(.system(size: 12))
@@ -68,8 +70,8 @@ struct RatingCard: View {
                         .foregroundColor(.secondary)
                 }
 
-                if !rating.notes.isEmpty {
-                    Text(rating.notes)
+                if let notes = rating.notes, !notes.isEmpty {
+                    Text(notes)
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                         .lineLimit(3)

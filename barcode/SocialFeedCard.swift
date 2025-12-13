@@ -10,7 +10,7 @@ import SwiftUI
 struct SocialFeedCard: View {
     let post: FeedPost
     let user: User
-    let venue: Venue
+    let venue: Venue?
     @EnvironmentObject var dataStore: DataStore
     @State private var showComments = false
 
@@ -62,14 +62,16 @@ struct SocialFeedCard: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.primary)
 
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                    if let venue = venue {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
 
-                        Text(venue.name)
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                            Text(venue.name)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
 
@@ -128,11 +130,13 @@ struct SocialFeedCard: View {
                 }
 
                 // Star rating
-                StarRatingView(rating: post.stars, size: 16)
+                if let stars = post.stars {
+                    StarRatingView(rating: stars, size: 16)
+                }
 
                 // Notes
-                if !post.notes.isEmpty {
-                    Text(post.notes)
+                if let notes = post.notes, !notes.isEmpty {
+                    Text(notes)
                         .font(.system(size: 15))
                         .foregroundColor(.secondary)
                         .lineSpacing(3)
