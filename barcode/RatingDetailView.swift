@@ -39,6 +39,11 @@ struct RatingDetailView: View {
                 // MARK: - Hero Header Card
                 heroHeader
 
+                // MARK: - Photo Gallery
+                if let media = rating.media, !media.isEmpty {
+                    photoGallery(media: media)
+                }
+
                 // MARK: - Wine-Specific Sections
                 if rating.category == .wine, let wineDetails = rating.wineDetails {
                     wineIdentityCard(wineDetails: wineDetails)
@@ -288,25 +293,25 @@ struct RatingDetailView: View {
     // MARK: - Beer Identity Card
     private func beerIdentityCard(beerDetails: BeerDetails) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Beer Identity")
+            Text("Beer Details")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 if let brewery = beerDetails.brewery {
-                    IdentityRow(label: "Brewery", value: brewery)
+                    BeerDetailRow(label: "Brewery", value: brewery, icon: "building.2")
                 }
                 if let style = beerDetails.style {
-                    IdentityRow(label: "Style", value: style.rawValue)
+                    BeerDetailRow(label: "Style", value: style.rawValue, icon: "mug")
                 }
                 if let abv = beerDetails.abv {
-                    IdentityRow(label: "ABV", value: abv + "%")
+                    BeerDetailRow(label: "ABV", value: abv + "%", icon: "percent", prominent: true)
                 }
                 if let ibu = beerDetails.ibu {
-                    IdentityRow(label: "IBU", value: ibu)
+                    BeerDetailRow(label: "IBU", value: ibu, icon: "leaf")
                 }
                 if let servingType = beerDetails.servingType {
-                    IdentityRow(label: "Serving", value: servingType.rawValue)
+                    BeerDetailRow(label: "Format", value: servingType.rawValue, icon: "wineglass")
                 }
             }
         }
@@ -320,45 +325,36 @@ struct RatingDetailView: View {
     // MARK: - Beer Flavor Profile Card
     private func beerFlavorProfileCard(beerDetails: BeerDetails) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Flavor Profile")
+            Text("Drinkability")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
 
             VStack(spacing: 16) {
                 if let bitterness = beerDetails.bitterness {
-                    FlavorProfileRow(
+                    BeerMeterRow(
                         label: "Bitterness",
                         level: bitterness,
                         color: categoryColor,
-                        leftLabel: "Low",
-                        rightLabel: "High"
-                    )
-                }
-                if let hoppiness = beerDetails.hoppiness {
-                    FlavorProfileRow(
-                        label: "Hoppiness",
-                        level: hoppiness,
-                        color: categoryColor,
-                        leftLabel: "Low",
-                        rightLabel: "High"
+                        leftLabel: "Mild",
+                        rightLabel: "Hoppy"
                     )
                 }
                 if let maltiness = beerDetails.maltiness {
-                    FlavorProfileRow(
-                        label: "Maltiness",
+                    BeerMeterRow(
+                        label: "Sweetness",
                         level: maltiness,
                         color: categoryColor,
-                        leftLabel: "Low",
-                        rightLabel: "High"
+                        leftLabel: "Dry",
+                        rightLabel: "Malty"
                     )
                 }
                 if let mouthfeel = beerDetails.mouthfeel {
-                    FlavorProfileRow(
-                        label: "Mouthfeel",
+                    BeerMeterRow(
+                        label: "Body",
                         level: mouthfeel,
                         color: categoryColor,
                         leftLabel: "Light",
-                        rightLabel: "Full"
+                        rightLabel: "Heavy"
                     )
                 }
             }
@@ -373,25 +369,25 @@ struct RatingDetailView: View {
     // MARK: - Cocktail Identity Card
     private func cocktailIdentityCard(cocktailDetails: CocktailDetails) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Cocktail Identity")
+            Text("Ingredients & Style")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 if let baseSpirit = cocktailDetails.baseSpirit {
-                    IdentityRow(label: "Base Spirit", value: baseSpirit.rawValue)
+                    CocktailDetailRow(label: "Base Spirit", value: baseSpirit.rawValue, icon: "drop.fill")
                 }
                 if let family = cocktailDetails.cocktailFamily {
-                    IdentityRow(label: "Family", value: family.rawValue)
-                }
-                if let prep = cocktailDetails.preparationStyle {
-                    IdentityRow(label: "Preparation", value: prep.rawValue)
+                    CocktailDetailRow(label: "Family", value: family.rawValue, icon: "list.bullet")
                 }
                 if let glass = cocktailDetails.glassType {
-                    IdentityRow(label: "Glass", value: glass.rawValue)
+                    CocktailDetailRow(label: "Glass", value: glass.rawValue, icon: "wineglass")
+                }
+                if let prep = cocktailDetails.preparationStyle {
+                    CocktailDetailRow(label: "Technique", value: prep.rawValue, icon: "arrow.triangle.2.circlepath")
                 }
                 if let garnish = cocktailDetails.garnish {
-                    IdentityRow(label: "Garnish", value: garnish)
+                    CocktailDetailRow(label: "Garnish", value: garnish, icon: "leaf.fill")
                 }
             }
         }
@@ -405,13 +401,13 @@ struct RatingDetailView: View {
     // MARK: - Cocktail Flavor Profile Card
     private func cocktailFlavorProfileCard(cocktailDetails: CocktailDetails) -> some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Flavor Profile")
+            Text("Balance")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
 
             VStack(spacing: 16) {
                 if let sweetness = cocktailDetails.sweetness {
-                    FlavorProfileRow(
+                    CocktailMeterRow(
                         label: "Sweetness",
                         level: sweetness,
                         color: categoryColor,
@@ -420,21 +416,21 @@ struct RatingDetailView: View {
                     )
                 }
                 if let booziness = cocktailDetails.booziness {
-                    FlavorProfileRow(
-                        label: "Booziness",
+                    CocktailMeterRow(
+                        label: "Spirit-Forward",
                         level: booziness,
                         color: categoryColor,
-                        leftLabel: "Light",
-                        rightLabel: "Strong"
+                        leftLabel: "Juice-Heavy",
+                        rightLabel: "Spirit-Heavy"
                     )
                 }
                 if let balance = cocktailDetails.balance {
-                    FlavorProfileRow(
+                    CocktailMeterRow(
                         label: "Balance",
                         level: balance,
                         color: categoryColor,
-                        leftLabel: "Unbalanced",
-                        rightLabel: "Balanced"
+                        leftLabel: "One-Note",
+                        rightLabel: "Complex"
                     )
                 }
             }
@@ -543,6 +539,50 @@ struct RatingDetailView: View {
             .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    // MARK: - Photo Gallery
+    private func photoGallery(media: [MediaItem]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(media) { mediaItem in
+                    AsyncImage(url: URL(string: mediaItem.fullUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 280, height: 280)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        case .failure(_):
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.systemGray5))
+                                .frame(width: 280, height: 280)
+                                .overlay(
+                                    VStack(spacing: 8) {
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 32))
+                                            .foregroundColor(.secondary)
+                                        Text("Failed to load")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                )
+                        case .empty:
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color(.systemGray5))
+                                .frame(width: 280, height: 280)
+                                .overlay(
+                                    ProgressView()
+                                )
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
     }
 }
 
@@ -732,6 +772,186 @@ extension FlavorProfileRow {
         case .high: tastingLevel = .high
         }
         self.level = tastingLevel
+    }
+}
+
+// MARK: - Beer-Specific Components
+
+struct BeerDetailRow: View {
+    let label: String
+    let value: String
+    let icon: String
+    var prominent: Bool = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+                .frame(width: 20)
+
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(prominent ? .body : .subheadline)
+                .fontWeight(prominent ? .semibold : .medium)
+                .foregroundColor(prominent ? .orange : .primary)
+        }
+    }
+}
+
+struct BeerMeterRow: View {
+    let label: String
+    let level: FlavorLevel
+    let color: Color
+    let leftLabel: String
+    let rightLabel: String
+
+    private var levelValue: Double {
+        switch level {
+        case .low: return 1.0
+        case .moderate: return 2.0
+        case .high: return 3.0
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+
+            // Horizontal meter bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 8)
+
+                    // Filled portion
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geometry.size.width * (levelValue / 3.0), height: 8)
+                }
+            }
+            .frame(height: 8)
+
+            // Context labels
+            HStack {
+                Text(leftLabel)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(rightLabel)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
+// Alternative for Mouthfeel
+extension BeerMeterRow {
+    init(label: String, level: Mouthfeel, color: Color, leftLabel: String, rightLabel: String) {
+        self.label = label
+        self.color = color
+        self.leftLabel = leftLabel
+        self.rightLabel = rightLabel
+
+        // Convert Mouthfeel to FlavorLevel
+        let flavorLevel: FlavorLevel
+        switch level {
+        case .light: flavorLevel = .low
+        case .medium: flavorLevel = .moderate
+        case .full, .creamy: flavorLevel = .high
+        }
+        self.level = flavorLevel
+    }
+}
+
+// MARK: - Cocktail-Specific Components
+
+struct CocktailDetailRow: View {
+    let label: String
+    let value: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 14))
+                .foregroundColor(.blue)
+                .frame(width: 20)
+
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+        }
+    }
+}
+
+struct CocktailMeterRow: View {
+    let label: String
+    let level: BalanceLevel
+    let color: Color
+    let leftLabel: String
+    let rightLabel: String
+
+    private var levelValue: Double {
+        switch level {
+        case .low: return 1.0
+        case .medium: return 2.0
+        case .high: return 3.0
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+
+            // Horizontal meter bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 8)
+
+                    // Filled portion
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(color)
+                        .frame(width: geometry.size.width * (levelValue / 3.0), height: 8)
+                }
+            }
+            .frame(height: 8)
+
+            // Context labels
+            HStack {
+                Text(leftLabel)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(rightLabel)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 }
 

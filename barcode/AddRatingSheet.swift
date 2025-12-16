@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 internal import _LocationEssentials
 
 struct AddRatingSheet: View {
@@ -23,6 +24,11 @@ struct AddRatingSheet: View {
     @State private var rating: Int = 3
     @State private var notes: String = ""
     @State private var isSubmitting: Bool = false
+
+    // Photo upload
+    @State private var selectedImages: [UIImage] = []
+    @State private var showingImagePicker = false
+    @StateObject private var mediaUploadService = MediaUploadService()
 
     // Category-specific details
     @State private var wineDetails = WineDetails()
@@ -119,6 +125,70 @@ struct AddRatingSheet: View {
                         }
                         .padding(.horizontal, 20)
 
+                        // Photo Selection
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Text("Photos")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+
+                                Text("(optional)")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+
+                                Spacer()
+
+                                Text("\(selectedImages.count)/5")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 12) {
+                                    // Add photo button
+                                    if selectedImages.count < 5 {
+                                        Button(action: {
+                                            showingImagePicker = true
+                                        }) {
+                                            VStack {
+                                                Image(systemName: "plus")
+                                                    .font(.system(size: 24))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            .frame(width: 80, height: 80)
+                                            .background(Color(.systemGray6))
+                                            .cornerRadius(12)
+                                        }
+                                    }
+
+                                    // Show selected images
+                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
+                                        ZStack(alignment: .topTrailing) {
+                                            Image(uiImage: image)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                                .frame(width: 80, height: 80)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                            // Remove button
+                                            Button(action: {
+                                                selectedImages.remove(at: index)
+                                            }) {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .font(.system(size: 20))
+                                                    .foregroundColor(.white)
+                                                    .background(Color.black.opacity(0.6))
+                                                    .clipShape(Circle())
+                                            }
+                                            .offset(x: 6, y: -6)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 2)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+
                         // Conditional Form based on category
                         if drinkCategory == .wine {
                             WineRatingForm(
@@ -174,9 +244,20 @@ struct AddRatingSheet: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             }
-                            Text(isSubmitting ? "Saving..." : "Save Rating")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
+
+                            if mediaUploadService.isUploading {
+                                Text("Uploading photos...")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.white)
+                            } else if isSubmitting {
+                                Text("Saving...")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.white)
+                            } else {
+                                Text("Save Rating")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -206,6 +287,9 @@ struct AddRatingSheet: View {
                     }
                 )
             }
+            .sheet(isPresented: $showingImagePicker) {
+                ImagePicker(selectedImages: $selectedImages, maxSelection: 5)
+            }
             .onAppear {
                 setInitialVenue()
             }
@@ -214,6 +298,8 @@ struct AddRatingSheet: View {
 
     func submitPost() async {
         isSubmitting = true
+
+        print("DEBUG: submitPost called - selectedImages count: \(selectedImages.count)")
 
         // Convert category-specific details to API format
         var beerDetailsReq: BeerDetailsRequest?
@@ -289,6 +375,29 @@ struct AddRatingSheet: View {
             cocktailDetails: cocktailDetailsReq,
             venueDetails: venueDetailsReq
         )
+
+        print("DEBUG: Post creation success: \(success), selectedImages.isEmpty: \(selectedImages.isEmpty)")
+
+        // Upload photos if the post was created successfully
+        if success, !selectedImages.isEmpty {
+            print("DEBUG: Uploading \(selectedImages.count) images")
+            // Get the newly created post ID from the posts list
+            if let newPost = postsManager.posts.first {
+                print("DEBUG: Post ID: \(newPost.id)")
+                let mediaIDs = await mediaUploadService.uploadImages(selectedImages, postID: newPost.id)
+                print("DEBUG: Uploaded media IDs: \(mediaIDs)")
+
+                // Attach each media to the post
+                for mediaID in mediaIDs {
+                    let attached = await mediaUploadService.attachMediaToPost(mediaID: mediaID, postID: newPost.id)
+                    print("DEBUG: Attached media \(mediaID) to post: \(attached)")
+                }
+            } else {
+                print("DEBUG: No new post found in posts list")
+            }
+        } else if !selectedImages.isEmpty {
+            print("DEBUG: Post creation failed, not uploading images")
+        }
 
         isSubmitting = false
 

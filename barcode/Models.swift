@@ -305,6 +305,20 @@ enum BalanceLevel: String, CaseIterable, Codable {
     case high = "High"
 }
 
+struct MediaItem: Identifiable, Codable {
+    let id: String
+    let url: String        // Thumbnail URL for list view
+    let fullUrl: String    // Full-size URL for detail view
+    let objectKey: String
+    let width: Int?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, url, objectKey, width, height
+        case fullUrl = "full_url"
+    }
+}
+
 struct Rating: Identifiable, Codable {
     let id: UUID
     var venueId: UUID?
@@ -315,6 +329,7 @@ struct Rating: Identifiable, Codable {
     var dateLogged: Date
 
     var photoNames: [String]
+    var media: [MediaItem]?
     var tags: [String]
 
     // Category-specific details
@@ -331,6 +346,7 @@ struct Rating: Identifiable, Codable {
         notes: String? = nil,
         dateLogged: Date = Date(),
         photoNames: [String] = [],
+        media: [MediaItem]? = nil,
         tags: [String] = [],
         wineDetails: WineDetails? = nil,
         beerDetails: BeerDetails? = nil,
@@ -344,6 +360,7 @@ struct Rating: Identifiable, Codable {
         self.notes = notes
         self.dateLogged = dateLogged
         self.photoNames = photoNames
+        self.media = media
         self.tags = tags
         self.wineDetails = wineDetails
         self.beerDetails = beerDetails

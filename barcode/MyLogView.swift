@@ -8,8 +8,8 @@
 import SwiftUI
 
 enum LogViewMode: String, CaseIterable {
-    case byVenue = "By Venue"
-    case timeline = "Timeline"
+    case timeline = "Recent"
+    case byVenue = "Places"
 }
 
 struct MyLogView: View {
@@ -17,7 +17,7 @@ struct MyLogView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @StateObject private var postsManager = PostsManager()
     @StateObject private var venuesManager = VenuesManager()
-    @State private var viewMode: LogViewMode = .byVenue
+    @State private var viewMode: LogViewMode = .timeline
     @State private var showingAddSheet = false
     @State private var searchText = ""
     @State private var selectedCategory: DrinkCategory? = nil // nil = "All"
@@ -70,7 +70,7 @@ struct MyLogView: View {
                 bitterness: nil,
                 hoppiness: nil,
                 maltiness: nil,
-                mouthfeel: nil
+                mouthfeel: bd.acidity.flatMap { Mouthfeel(rawValue: $0) }
             )
         }
 
@@ -90,6 +90,24 @@ struct MyLogView: View {
             )
         }
 
+        // Convert media items
+        let media = post.media?.map { mediaResponse in
+            print("DEBUG MyLogView toRating: Converting media - id=\(mediaResponse.id), url=\(mediaResponse.url), fullUrl=\(mediaResponse.fullUrl)")
+            return MediaItem(
+                id: mediaResponse.id,
+                url: mediaResponse.url,
+                fullUrl: mediaResponse.fullUrl,
+                objectKey: mediaResponse.objectKey,
+                width: mediaResponse.width,
+                height: mediaResponse.height
+            )
+        }
+        if let mediaCount = media?.count {
+            print("DEBUG MyLogView toRating: Post \(post.drinkName) has \(mediaCount) media items")
+        } else {
+            print("DEBUG MyLogView toRating: Post \(post.drinkName) has NO media")
+        }
+
         return Rating(
             id: postUUID,
             venueId: venueUUID,
@@ -99,6 +117,7 @@ struct MyLogView: View {
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
+            media: media,
             tags: [],
             wineDetails: wineDetails,
             beerDetails: beerDetails,
@@ -492,6 +511,18 @@ struct VenueLogCardSimple: View {
             )
         }
 
+        // Convert media items
+        let media = post.media?.map { mediaResponse in
+            MediaItem(
+                id: mediaResponse.id,
+                url: mediaResponse.url,
+                fullUrl: mediaResponse.fullUrl,
+                objectKey: mediaResponse.objectKey,
+                width: mediaResponse.width,
+                height: mediaResponse.height
+            )
+        }
+
         return Rating(
             id: postUUID,
             venueId: venueUUID,
@@ -501,6 +532,7 @@ struct VenueLogCardSimple: View {
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
+            media: media,
             tags: [],
             wineDetails: wineDetails,
             beerDetails: beerDetails,
@@ -649,6 +681,18 @@ struct VenueLogCard: View {
             )
         }
 
+        // Convert media items
+        let media = post.media?.map { mediaResponse in
+            MediaItem(
+                id: mediaResponse.id,
+                url: mediaResponse.url,
+                fullUrl: mediaResponse.fullUrl,
+                objectKey: mediaResponse.objectKey,
+                width: mediaResponse.width,
+                height: mediaResponse.height
+            )
+        }
+
         return Rating(
             id: postUUID,
             venueId: venueUUID,
@@ -658,6 +702,7 @@ struct VenueLogCard: View {
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
+            media: media,
             tags: [],
             wineDetails: wineDetails,
             beerDetails: beerDetails,
@@ -821,13 +866,35 @@ struct TimelineRatingCard: View {
     var body: some View {
         HStack(spacing: 12) {
             // Photo or placeholder
-            if let photoName = rating.photoNames.first {
-                Image(photoName)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 80, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            if let firstMedia = rating.media?.first {
+                let _ = print("TimelineRatingCard: media exists for \(rating.drinkName), url=\(firstMedia.url)")
+                AsyncImage(url: URL(string: firstMedia.url)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        let _ = print("TimelineRatingCard: AsyncImage SUCCESS for \(rating.drinkName)")
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    case .failure(let error):
+                        let _ = print("TimelineRatingCard: AsyncImage FAILED for \(rating.drinkName), error=\(error)")
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(categoryColor.opacity(0.15))
+                            .frame(width: 80, height: 80)
+                    case .empty:
+                        let _ = print("TimelineRatingCard: AsyncImage EMPTY for \(rating.drinkName)")
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(categoryColor.opacity(0.15))
+                            .frame(width: 80, height: 80)
+                    @unknown default:
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(categoryColor.opacity(0.15))
+                            .frame(width: 80, height: 80)
+                    }
+                }
             } else {
+                let _ = print("TimelineRatingCard: NO media for \(rating.drinkName)")
                 RoundedRectangle(cornerRadius: 8)
                     .fill(categoryColor.opacity(0.15))
                     .frame(width: 80, height: 80)

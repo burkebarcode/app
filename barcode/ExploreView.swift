@@ -223,18 +223,37 @@ struct DiscoveredVenueCard: View {
         }
     }
 
+    var placeholderImage: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color.blue.opacity(0.1))
+            .frame(width: 80, height: 80)
+            .overlay(
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.blue.opacity(0.6))
+            )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                // Placeholder image
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.blue.opacity(0.1))
-                    .frame(width: 80, height: 80)
-                    .overlay(
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.blue.opacity(0.6))
-                    )
+                // Venue image - use latest post photo if available
+                if let photoUrl = venue.latestPhotoUrl {
+                    AsyncImage(url: URL(string: photoUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 80, height: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        default:
+                            placeholderImage
+                        }
+                    }
+                } else {
+                    placeholderImage
+                }
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(venue.name)

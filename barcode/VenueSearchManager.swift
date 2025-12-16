@@ -19,6 +19,7 @@ struct DiscoveredVenue: Identifiable, Equatable {
     let distance: Double // meters
     let phoneNumber: String?
     let url: URL?
+    var latestPhotoUrl: String? // URL of the latest post with media
 
     static func == (lhs: DiscoveredVenue, rhs: DiscoveredVenue) -> Bool {
         lhs.id == rhs.id
@@ -35,6 +36,7 @@ class VenueSearchManager: ObservableObject {
     private var cachedResults: [DiscoveredVenue] = []
     private var cacheTimestamp: Date?
     private let cacheExpirationInterval: TimeInterval = 300 // 5 minutes
+    private let apiService = APIService.shared
 
     private let searchCategories = [
         "bar",
@@ -77,12 +79,15 @@ class VenueSearchManager: ObservableObject {
             // Limit results
             let limited = Array(sorted.prefix(50))
 
+            // Enrich venues with latest photos from posts
+            let enriched = await enrichWithPhotos(limited)
+
             // Cache results
-            cachedResults = limited
+            cachedResults = enriched
             cacheTimestamp = Date()
             lastSearchLocation = location
 
-            self.venues = limited
+            self.venues = enriched
         } catch {
             errorMessage = "Failed to search venues: \(error.localizedDescription)"
             print("Search error: \(error)")
@@ -214,5 +219,54 @@ class VenueSearchManager: ObservableObject {
         // Clean up category names
         let cleaned = category.replacingOccurrences(of: "MKPOICategory", with: "")
         return cleaned.capitalized
+    }
+
+    private func enrichWithPhotos(_ venues: [DiscoveredVenue]) async -> [DiscoveredVenue] {
+        // Process venues in parallel to fetch latest photos
+        await withTaskGroup(of: (Int, DiscoveredVenue).self) { group in
+            for (index, venue) in venues.enumerated() {
+                group.addTask {
+                    var enrichedVenue = venue
+                    if let photoUrl = await self.fetchLatestPhotoForVenue(venue) {
+                        enrichedVenue.latestPhotoUrl = photoUrl
+                    }
+                    return (index, enrichedVenue)
+                }
+            }
+
+            var results = Array(repeating: venues[0], count: venues.count)
+            for await (index, enrichedVenue) in group {
+                results[index] = enrichedVenue
+            }
+            return results
+        }
+    }
+
+    private func fetchLatestPhotoForVenue(_ venue: DiscoveredVenue) async -> String? {
+        do {
+            // Fetch posts for this venue's external place ID
+            let posts = try await apiService.getPosts(externalPlaceId: venue.id)
+
+            // Find the latest post with media
+            let postsWithMedia = posts.filter { post in
+                guard let media = post.media, !media.isEmpty else { return false }
+                return true
+            }
+
+            // Sort by creation date (most recent first) and get the first one
+            let sortedPosts = postsWithMedia.sorted { post1, post2 in
+                guard let date1 = ISO8601DateFormatter().date(from: post1.createdAt),
+                      let date2 = ISO8601DateFormatter().date(from: post2.createdAt) else {
+                    return false
+                }
+                return date1 > date2
+            }
+
+            // Return the thumbnail URL from the latest post
+            return sortedPosts.first?.media?.first?.url
+        } catch {
+            print("Failed to fetch posts for venue \(venue.name): \(error)")
+            return nil
+        }
     }
 }

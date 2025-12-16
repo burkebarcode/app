@@ -71,8 +71,8 @@ struct UserResponse: Codable {
 class APIService {
     static let shared = APIService()
 
-    //private let baseURL = "https://barcode-gateway.fly.dev"
-    private let baseURL = "http://localhost:9000"
+    //let baseURL = "https://barcode-gateway.fly.dev"
+    let baseURL = "http://localhost:9000"
     private let tokenManager = TokenManager.shared
     private var refreshTask: Task<Void, Never>?
 
@@ -161,6 +161,19 @@ class APIService {
 
         guard httpResponse.statusCode >= 200 && httpResponse.statusCode < 300 else {
             throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        // Debug: Print raw JSON for feed responses
+        if request.url?.path.contains("/feed") == true {
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("DEBUG APIService: Raw JSON response length: \(jsonString.count)")
+                // Print first post's media field
+                if let jsonData = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                   let firstPost = jsonData.first {
+                    print("DEBUG APIService: First post id: \(firstPost["id"] ?? "nil")")
+                    print("DEBUG APIService: First post media: \(firstPost["media"] ?? "nil")")
+                }
+            }
         }
 
         return try JSONDecoder().decode(T.self, from: data)
@@ -596,6 +609,22 @@ struct CocktailDetailsRequest: Codable {
     }
 }
 
+struct MediaItemResponse: Codable {
+    let id: String
+    let url: String
+    let fullUrl: String
+    let objectKey: String
+    let width: Int?
+    let height: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, url
+        case fullUrl = "full_url"
+        case objectKey = "object_key"
+        case width, height
+    }
+}
+
 struct PostResponse: Codable, Identifiable {
     let id: String
     let userId: String
@@ -607,6 +636,7 @@ struct PostResponse: Codable, Identifiable {
     let wineDetails: WineDetailsResponse?
     let beerDetails: BeerDetailsResponse?
     let cocktailDetails: CocktailDetailsResponse?
+    let media: [MediaItemResponse]?
     let createdAt: String
     let updatedAt: String
 
@@ -618,6 +648,7 @@ struct PostResponse: Codable, Identifiable {
         case drinkCategory = "drink_category"
         case stars, notes
         case wineDetails, beerDetails, cocktailDetails
+        case media
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
