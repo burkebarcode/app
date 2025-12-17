@@ -92,13 +92,10 @@ struct ExploreView: View {
                     // Content
                     if searchManager.isLoading {
                         VStack(spacing: 16) {
-                            ProgressView()
-                            Text("Finding venues nearby...")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            BarcodeLoader()
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
+                        .padding(.top, 85)
                     } else if let error = searchManager.errorMessage {
                         VStack(spacing: 16) {
                             Image(systemName: "exclamationmark.triangle")

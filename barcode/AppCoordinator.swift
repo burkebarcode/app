@@ -14,6 +14,7 @@ class AppCoordinator: ObservableObject {
     @Published var shouldOpenAddRating: Bool = false
     @Published var preselectedVenue: Venue?
     @Published var preselectedVenueFromDiscovery: DiscoveredVenue?
+    @Published var navigateToCollection: DrinkCollection?
 
     func logDrinkAtVenue(_ venue: DiscoveredVenue) {
         // Convert DiscoveredVenue to Venue
@@ -35,5 +36,13 @@ class AppCoordinator: ObservableObject {
         shouldOpenAddRating = false
         preselectedVenue = nil
         preselectedVenueFromDiscovery = nil
+    }
+
+    func navigateToDrinkCollection(_ collection: DrinkCollection) {
+        navigateToCollection = collection
+    }
+
+    func resetNavigationState() {
+        navigateToCollection = nil
     }
 }

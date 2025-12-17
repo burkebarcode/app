@@ -8,8 +8,8 @@
 import SwiftUI
 
 enum LogViewMode: String, CaseIterable {
-    case timeline = "Recent"
-    case byVenue = "Places"
+    case collection = "Collection"
+    case timeline = "Timeline"
 }
 
 struct MyLogView: View {
@@ -17,7 +17,7 @@ struct MyLogView: View {
     @EnvironmentObject var coordinator: AppCoordinator
     @StateObject private var postsManager = PostsManager()
     @StateObject private var venuesManager = VenuesManager()
-    @State private var viewMode: LogViewMode = .timeline
+    @State private var viewMode: LogViewMode = .collection
     @State private var showingAddSheet = false
     @State private var searchText = ""
     @State private var selectedCategory: DrinkCategory? = nil // nil = "All"
@@ -144,6 +144,35 @@ struct MyLogView: View {
         return posts
     }
 
+    var drinkCollections: [DrinkCollection] {
+        // Convert filtered posts to ratings
+        let ratings = filteredPosts.compactMap { toRating($0) }
+
+        // Group by drink name + category + varietal (for wines)
+        let grouped = Dictionary(grouping: ratings) { rating in
+            let varietal = rating.wineDetails?.varietal ?? ""
+            return "\(rating.drinkName.lowercased())_\(rating.category.rawValue)_\(varietal.lowercased())"
+        }
+
+        // Create DrinkCollection objects
+        return grouped.map { key, tastings in
+            let first = tastings.first!
+            return DrinkCollection(
+                id: key,
+                name: first.drinkName,
+                category: first.category,
+                tastings: tastings.sorted { $0.dateLogged > $1.dateLogged }
+            )
+        }.sorted { collection1, collection2 in
+            // Sort by most recent tasting
+            guard let date1 = collection1.lastTried,
+                  let date2 = collection2.lastTried else {
+                return false
+            }
+            return date1 > date2
+        }
+    }
+
     var venuesWithRatings: [UUID] {
         // Get unique venue IDs from filtered posts (excluding posts without venues)
         let venueIds = Set(filteredPosts.compactMap { post in
@@ -193,6 +222,23 @@ struct MyLogView: View {
 
     var body: some View {
         NavigationView {
+            ZStack {
+                // Hidden NavigationLink for programmatic navigation to collection detail
+                if let collection = coordinator.navigateToCollection {
+                    NavigationLink(
+                        destination: DrinkCollectionDetailView(collection: collection)
+                            .environmentObject(dataStore)
+                            .environmentObject(postsManager),
+                        isActive: Binding(
+                            get: { coordinator.navigateToCollection != nil },
+                            set: { if !$0 { coordinator.resetNavigationState() } }
+                        )
+                    ) {
+                        EmptyView()
+                    }
+                    .hidden()
+                }
+
             VStack(spacing: 0) {
                 // Modern Header with Search
                 VStack(spacing: 14) {
@@ -313,8 +359,8 @@ struct MyLogView: View {
                     }
                     Spacer()
                 } else {
-                    if viewMode == .byVenue {
-                        ByVenueView(postsManager: postsManager, venues: venuesWithRatings)
+                    if viewMode == .collection {
+                        CollectionView(postsManager: postsManager, collections: drinkCollections)
                     } else {
                         TimelineView(postsManager: postsManager, ratings: allRatingsTimeline)
                     }
@@ -351,6 +397,7 @@ struct MyLogView: View {
                     }
                 }
             }
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
     }
@@ -385,6 +432,30 @@ struct ByVenueView: View {
                 ForEach(venues, id: \.self) { venueId in
                     VenueLogCardById(postsManager: postsManager, venueId: venueId)
                         .environmentObject(dataStore)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+    }
+}
+
+struct CollectionView: View {
+    @EnvironmentObject var dataStore: DataStore
+    @ObservedObject var postsManager: PostsManager
+    let collections: [DrinkCollection]
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(collections) { collection in
+                    NavigationLink(destination: DrinkCollectionDetailView(collection: collection)
+                        .environmentObject(dataStore)
+                        .environmentObject(postsManager)) {
+                        DrinkCollectionCard(collection: collection)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 12)
@@ -847,6 +918,124 @@ struct CompactRatingRow: View {
         .padding(.horizontal, 12)
         .background(Color(.systemGray6).opacity(0.5))
         .cornerRadius(8)
+    }
+}
+
+struct DrinkCollectionCard: View {
+    let collection: DrinkCollection
+
+    var categoryColor: Color {
+        switch collection.category {
+        case .beer: return .orange
+        case .wine: return .purple
+        case .cocktail: return .blue
+        case .other: return .gray
+        }
+    }
+
+    var categoryIcon: String {
+        switch collection.category {
+        case .wine: return "wineglass.fill"
+        case .beer: return "mug.fill"
+        case .cocktail: return "martini.glass.fill"
+        case .other: return "drop.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Thumbnail - use latest tasting's first media
+            if let firstMedia = collection.latestTasting?.media?.first {
+                AsyncImage(url: URL(string: firstMedia.url)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    default:
+                        categoryThumbnail
+                    }
+                }
+            } else {
+                categoryThumbnail
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                // Drink name
+                Text(collection.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+
+                // Stats row
+                HStack(spacing: 6) {
+                    // Average rating
+                    if let avgRating = collection.averageRating {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.yellow)
+                            Text(String(format: "%.1f", avgRating))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.primary)
+                        }
+                    }
+
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+
+                    // Times tried
+                    Text("\(collection.timesTried) tasting\(collection.timesTried == 1 ? "" : "s")")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+
+                // Last tried date
+                if let lastTried = collection.lastTried {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        let formatter = RelativeDateTimeFormatter()
+                        Text("Last: \(formatter.localizedString(for: lastTried, relativeTo: Date()))")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            // Category icon + chevron
+            VStack(spacing: 8) {
+                Image(systemName: categoryIcon)
+                    .font(.system(size: 20))
+                    .foregroundColor(categoryColor)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(.tertiaryLabel))
+            }
+        }
+        .padding(12)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+    }
+
+    var categoryThumbnail: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(categoryColor.opacity(0.15))
+            .frame(width: 80, height: 80)
+            .overlay(
+                Image(systemName: categoryIcon)
+                    .font(.system(size: 32))
+                    .foregroundColor(categoryColor.opacity(0.6))
+            )
     }
 }
 

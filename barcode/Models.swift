@@ -7,6 +7,32 @@
 
 import Foundation
 
+// Represents a unique drink with all its tastings
+struct DrinkCollection: Identifiable {
+    let id: String // Composite of name + category
+    let name: String
+    let category: DrinkCategory
+    let tastings: [Rating] // All tasting instances
+
+    var timesTried: Int {
+        tastings.count
+    }
+
+    var averageRating: Double? {
+        let rated = tastings.compactMap { $0.stars }
+        guard !rated.isEmpty else { return nil }
+        return Double(rated.reduce(0, +)) / Double(rated.count)
+    }
+
+    var lastTried: Date? {
+        tastings.map { $0.dateLogged }.max()
+    }
+
+    var latestTasting: Rating? {
+        tastings.sorted { $0.dateLogged > $1.dateLogged }.first
+    }
+}
+
 struct User: Identifiable, Codable {
     let id: UUID
     var username: String

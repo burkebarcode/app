@@ -12,10 +12,15 @@ internal import _LocationEssentials
 struct AddRatingSheet: View {
     let initialVenue: Venue?
     let discoveredVenue: DiscoveredVenue?
+    let initialDrinkName: String?
+    let initialCategory: DrinkCategory?
+    let initialVarietal: String?
+    let initialWineStyle: WineStyle?
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var dataStore: DataStore
     @EnvironmentObject var postsManager: PostsManager
+    @EnvironmentObject var coordinator: AppCoordinator
 
     @State private var selectedVenue: Venue?
     @State private var showingVenueSearch = false
@@ -24,6 +29,8 @@ struct AddRatingSheet: View {
     @State private var rating: Int = 3
     @State private var notes: String = ""
     @State private var isSubmitting: Bool = false
+    @State private var showingSuggestions: Bool = false
+    @FocusState private var drinkNameFieldFocused: Bool
 
     // Photo upload
     @State private var selectedImages: [UIImage] = []
@@ -38,196 +45,498 @@ struct AddRatingSheet: View {
     // TODO: Replace with actual current user ID from auth system
     let currentUserId = UUID()
 
-    init(initialVenue: Venue? = nil, discoveredVenue: DiscoveredVenue? = nil) {
+    init(
+        initialVenue: Venue? = nil,
+        discoveredVenue: DiscoveredVenue? = nil,
+        initialDrinkName: String? = nil,
+        initialCategory: DrinkCategory? = nil,
+        initialVarietal: String? = nil,
+        initialWineStyle: WineStyle? = nil
+    ) {
         self.initialVenue = initialVenue
         self.discoveredVenue = discoveredVenue
+        self.initialDrinkName = initialDrinkName
+        self.initialCategory = initialCategory
+        self.initialVarietal = initialVarietal
+        self.initialWineStyle = initialWineStyle
     }
 
     var canSave: Bool {
         !drinkName.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    // Get varietals based on selected wine style (defaults to red if no style selected)
+    var availableVarietals: [String] {
+        let style = wineDetails.style ?? .red
+
+        switch style {
+        case .red:
+            return [
+                "Cabernet Sauvignon", "Merlot", "Pinot Noir", "Syrah", "Shiraz",
+                "Malbec", "Zinfandel", "Tempranillo", "Sangiovese", "Nebbiolo",
+                "Grenache", "Barbera", "Petite Sirah", "Carmenere", "Mourvedre",
+                "Cabernet Franc", "Gamay", "Primitivo", "Touriga Nacional", "Other"
+            ]
+        case .white:
+            return [
+                "Chardonnay", "Sauvignon Blanc", "Pinot Grigio", "Pinot Gris", "Riesling",
+                "Moscato", "Gewürztraminer", "Viognier", "Albariño", "Grüner Veltliner",
+                "Chenin Blanc", "Semillon", "Torrontés", "Vermentino", "Assyrtiko",
+                "Soave", "Garganega", "Fiano", "Verdejo", "Other"
+            ]
+        case .rose:
+            return [
+                "Grenache Rosé", "Syrah Rosé", "Pinot Noir Rosé", "Sangiovese Rosé",
+                "Tempranillo Rosé", "Mourvèdre Rosé", "Provence Blend", "Other"
+            ]
+        case .orange:
+            return [
+                "Pinot Grigio", "Ribolla Gialla", "Friulano", "Sauvignon Blanc",
+                "Rkatsiteli", "Mtsvane", "Other"
+            ]
+        case .sparkling:
+            return [
+                "Champagne", "Prosecco", "Cava", "Crémant", "Franciacorta",
+                "Lambrusco", "Sekt", "Pét-Nat", "Other"
+            ]
+        case .dessert:
+            return [
+                "Port", "Sauternes", "Ice Wine", "Late Harvest", "Moscato d'Asti",
+                "Tokaji", "Vin Santo", "Pedro Ximénez", "Madeira", "Other"
+            ]
+        }
+    }
+
+    // Get unique drink names from previous posts for typeahead
+    var drinkSuggestions: [String] {
+        guard !drinkName.isEmpty else { return [] }
+
+        // Get unique drink names from posts
+        let uniqueDrinks = Set(postsManager.posts.map { $0.drinkName })
+
+        // Filter by current input (case-insensitive fuzzy match)
+        let filtered = uniqueDrinks.filter { drink in
+            drink.localizedCaseInsensitiveContains(drinkName)
+        }
+
+        // Sort by relevance: exact prefix matches first, then others
+        let sorted = filtered.sorted { drink1, drink2 in
+            let starts1 = drink1.lowercased().hasPrefix(drinkName.lowercased())
+            let starts2 = drink2.lowercased().hasPrefix(drinkName.lowercased())
+            if starts1 && !starts2 { return true }
+            if !starts1 && starts2 { return false }
+            return drink1.localizedCaseInsensitiveCompare(drink2) == .orderedAscending
+        }
+
+        return Array(sorted.prefix(5))
+    }
+
     var body: some View {
         NavigationView {
-            ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                // Scrollable Content
                 ScrollView {
-                    VStack(spacing: 24) {
-                        // Header with subtitle
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Add Rating")
-                                .font(.system(size: 32, weight: .bold))
+                    VStack(spacing: 20) {
+                        // Header
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Record tasting")
+                                .font(.system(size: 28, weight: .bold))
                                 .foregroundColor(.primary)
 
-                            Text("Log a drink you tried")
-                                .font(.system(size: 16))
-                                .foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
 
-                        // Venue Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Venue")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
+                    // Category Selection
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Category")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
 
-                            if let venue = selectedVenue {
-                                VenueSelectionCard(venue: venue, onClear: {
-                                    selectedVenue = nil
-                                })
-                            } else {
-                                Button(action: {
-                                    showingVenueSearch = true
-                                }) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "magnifyingglass")
-                                            .font(.system(size: 18))
-                                            .foregroundColor(.secondary)
-
-                                        Text("Search for a venue...")
-                                            .font(.system(size: 16))
-                                            .foregroundColor(.secondary)
-
-                                        Spacer()
-
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 14, weight: .medium))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                    .padding(16)
-                                    .background(Color(.systemGray6))
-                                    .cornerRadius(12)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                        .padding(.horizontal, 20)
-
-                        // Category Selection
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Category")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
-
-                            // Category pills
-                            HStack(spacing: 10) {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
                                 ForEach(DrinkCategory.allCases, id: \.self) { category in
-                                    CategoryPill(
+                                    CategoryButton(
                                         category: category,
                                         isSelected: drinkCategory == category,
-                                        onTap: {
-                                            drinkCategory = category
-                                        }
+                                        onTap: { drinkCategory = category }
                                     )
                                 }
                             }
                         }
-                        .padding(.horizontal, 20)
+                    }
 
-                        // Photo Selection
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Text("Photos")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.primary)
+                    // Section 1: What did you try? (required)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("What did you try?")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
 
-                                Text("(optional)")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.secondary)
+                        VStack(alignment: .leading, spacing: 0) {
+                            TextField("Wine name (e.g. Caymus Cabernet)", text: $drinkName)
+                                .font(.system(size: 17))
+                                .padding(14)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                                .autocorrectionDisabled()
+                                .focused($drinkNameFieldFocused)
+                                .onChange(of: drinkName) { _ in
+                                    showingSuggestions = !drinkName.isEmpty && drinkNameFieldFocused
+                                }
+                                .onChange(of: drinkNameFieldFocused) { focused in
+                                    showingSuggestions = focused && !drinkName.isEmpty
+                                }
 
-                                Spacer()
-
-                                Text("\(selectedImages.count)/5")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.secondary)
-                            }
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    // Add photo button
-                                    if selectedImages.count < 5 {
+                            // Typeahead suggestions
+                            if showingSuggestions && !drinkSuggestions.isEmpty {
+                                VStack(spacing: 0) {
+                                    ForEach(drinkSuggestions, id: \.self) { suggestion in
                                         Button(action: {
-                                            showingImagePicker = true
+                                            drinkName = suggestion
+                                            showingSuggestions = false
+                                            drinkNameFieldFocused = false
                                         }) {
-                                            VStack {
-                                                Image(systemName: "plus")
-                                                    .font(.system(size: 24))
+                                            HStack {
+                                                Image(systemName: "clock.arrow.circlepath")
+                                                    .font(.system(size: 14))
                                                     .foregroundColor(.secondary)
+
+                                                Text(suggestion)
+                                                    .font(.system(size: 15))
+                                                    .foregroundColor(.primary)
+
+                                                Spacer()
                                             }
-                                            .frame(width: 80, height: 80)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(12)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                            .background(Color(.systemBackground))
                                         }
-                                    }
+                                        .buttonStyle(PlainButtonStyle())
 
-                                    // Show selected images
-                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
-                                        ZStack(alignment: .topTrailing) {
-                                            Image(uiImage: image)
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fill)
-                                                .frame(width: 80, height: 80)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                                            // Remove button
-                                            Button(action: {
-                                                selectedImages.remove(at: index)
-                                            }) {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.system(size: 20))
-                                                    .foregroundColor(.white)
-                                                    .background(Color.black.opacity(0.6))
-                                                    .clipShape(Circle())
-                                            }
-                                            .offset(x: 6, y: -6)
+                                        if suggestion != drinkSuggestions.last {
+                                            Divider()
+                                                .padding(.leading, 40)
                                         }
                                     }
                                 }
-                                .padding(.horizontal, 2)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(10)
+                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+                                .padding(.top, 4)
                             }
                         }
-                        .padding(.horizontal, 20)
-
-                        // Conditional Form based on category
-                        if drinkCategory == .wine {
-                            WineRatingForm(
-                                wineName: $drinkName,
-                                wineDetails: $wineDetails,
-                                rating: $rating,
-                                notes: $notes
-                            )
-                            .padding(.horizontal, 20)
-                        } else if drinkCategory == .beer {
-                            BeerRatingForm(
-                                beerName: $drinkName,
-                                beerDetails: $beerDetails,
-                                rating: $rating,
-                                notes: $notes
-                            )
-                            .padding(.horizontal, 20)
-                        } else if drinkCategory == .cocktail {
-                            CocktailRatingForm(
-                                cocktailName: $drinkName,
-                                cocktailDetails: $cocktailDetails,
-                                rating: $rating,
-                                notes: $notes
-                            )
-                            .padding(.horizontal, 20)
-                        } else {
-                            // Generic drink form for other
-                            GenericDrinkForm(
-                                drinkName: $drinkName,
-                                rating: $rating,
-                                notes: $notes
-                            )
-                            .padding(.horizontal, 20)
-                        }
-
-                        // Bottom spacing for sticky button
-                        Spacer(minLength: 80)
                     }
-                    .padding(.bottom, 80)
+
+                    // Section 2: Wine Style (only for wine)
+                    if drinkCategory == .wine {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Wine Style")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.primary)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(WineStyle.allCases, id: \.self) { style in
+                                        CompactWineStylePill(
+                                            style: style,
+                                            isSelected: wineDetails.style == style,
+                                            onTap: {
+                                                wineDetails.style = style
+                                                // Reset varietal when style changes
+                                                wineDetails.varietal = nil
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Section 3: How was it? (required)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("How was it?")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        HStack {
+                            Spacer()
+                            StarRatingView(
+                                rating: rating,
+                                size: 40,
+                                interactive: true,
+                                onRatingChanged: { newRating in
+                                    rating = newRating
+                                }
+                            )
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+
+                        // Show numeric value
+                        Text("\(rating).0")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    // Section 4: Quick note (optional but encouraged)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Quick note")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+
+                        ZStack(alignment: .topLeading) {
+                            if notes.isEmpty {
+                                Text("Quick thoughts (optional)")
+                                    .foregroundColor(Color(.placeholderText))
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                            }
+
+                            TextEditor(text: $notes)
+                                .frame(minHeight: 80, maxHeight: 80)
+                                .scrollContentBackground(.hidden)
+                                .background(Color.clear)
+                        }
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(10)
+                    }
+
+                    // Section 5: Wine Details (optional, collapsed by default, only for wine)
+                    if drinkCategory == .wine {
+
+                        DisclosureGroup("Wine details (optional)") {
+                        VStack(spacing: 16) {
+                            // Varietal (dropdown based on wine style, defaults to red)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Varietal")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.secondary)
+
+                                Menu {
+                                    ForEach(availableVarietals, id: \.self) { varietal in
+                                        Button(action: {
+                                            wineDetails.varietal = varietal
+                                        }) {
+                                            HStack {
+                                                Text(varietal)
+                                                if wineDetails.varietal == varietal {
+                                                    Spacer()
+                                                    Image(systemName: "checkmark")
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(wineDetails.varietal ?? "Select varietal")
+                                            .font(.system(size: 15))
+                                            .foregroundColor(wineDetails.varietal != nil ? .primary : Color(.placeholderText))
+                                        Spacer()
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(10)
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(8)
+                                }
+                            }
+
+                            Divider()
+
+                            // Tasting Profile
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Sweetness
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Sweetness")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.secondary)
+
+                                    HStack(spacing: 6) {
+                                        ForEach(SweetnessLevel.allCases, id: \.self) { level in
+                                            TastingLevelButton(
+                                                label: level.rawValue,
+                                                isSelected: wineDetails.sweetness == level,
+                                                onTap: { wineDetails.sweetness = level }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Body
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Body")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.secondary)
+
+                                    HStack(spacing: 6) {
+                                        ForEach(WineBody.allCases, id: \.self) { body in
+                                            TastingLevelButton(
+                                                label: body.rawValue,
+                                                isSelected: wineDetails.body == body,
+                                                onTap: { wineDetails.body = body }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Tannin
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Tannin")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.secondary)
+
+                                    HStack(spacing: 6) {
+                                        ForEach(TastingLevel.allCases, id: \.self) { level in
+                                            TastingLevelButton(
+                                                label: level.rawValue,
+                                                isSelected: wineDetails.tannin == level,
+                                                onTap: { wineDetails.tannin = level }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Acidity
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Acidity")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.secondary)
+
+                                    HStack(spacing: 6) {
+                                        ForEach(TastingLevel.allCases, id: \.self) { level in
+                                            TastingLevelButton(
+                                                label: level.rawValue,
+                                                isSelected: wineDetails.acidity == level,
+                                                onTap: { wineDetails.acidity = level }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Divider()
+
+                            // Wine Identity
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Region and Vintage
+                                HStack(spacing: 10) {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Region")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.secondary)
+
+                                        TextField("e.g. Napa", text: Binding(
+                                            get: { wineDetails.region ?? "" },
+                                            set: { wineDetails.region = $0.isEmpty ? nil : $0 }
+                                        ))
+                                        .font(.system(size: 15))
+                                        .padding(10)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
+                                        .autocorrectionDisabled()
+                                    }
+
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Vintage")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.secondary)
+
+                                        TextField("Year", text: Binding(
+                                            get: { wineDetails.vintage ?? "" },
+                                            set: { wineDetails.vintage = $0.isEmpty ? nil : $0 }
+                                        ))
+                                        .font(.system(size: 15))
+                                        .padding(10)
+                                        .background(Color(.systemGray6))
+                                        .cornerRadius(8)
+                                        .keyboardType(.numberPad)
+                                        .frame(width: 80)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 12)
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .padding(.vertical, 8)
+                    }
+
+                    // Section 5: Context (optional, collapsed by default)
+                    DisclosureGroup("Add context (optional)") {
+                        VStack(spacing: 12) {
+                            // Add photo button
+                            Button(action: {
+                                showingImagePicker = true
+                            }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: selectedImages.isEmpty ? "camera" : "checkmark.circle.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(selectedImages.isEmpty ? .secondary : .green)
+
+                                    Text(selectedImages.isEmpty ? "Add photo" : "\(selectedImages.count) photo\(selectedImages.count == 1 ? "" : "s")")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.primary)
+
+                                    Spacer()
+
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding(12)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+
+                            // Add place button
+                            Button(action: {
+                                showingVenueSearch = true
+                            }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: selectedVenue != nil ? "checkmark.circle.fill" : "mappin.circle")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(selectedVenue != nil ? .green : .secondary)
+
+                                    Text(selectedVenue?.name ?? "Add place")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.primary)
+
+                                    Spacer()
+
+                                    if selectedVenue != nil {
+                                        Button(action: {
+                                            selectedVenue = nil
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 18))
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    } else {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .padding(.top, 8)
+                    }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 8)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
                 }
 
                 // Sticky bottom button
@@ -245,19 +554,9 @@ struct AddRatingSheet: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             }
 
-                            if mediaUploadService.isUploading {
-                                Text("Uploading photos...")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.white)
-                            } else if isSubmitting {
-                                Text("Saving...")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.white)
-                            } else {
-                                Text("Save Rating")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
+                            Text(isSubmitting ? "Saving..." : "Save tasting")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(.white)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -292,7 +591,23 @@ struct AddRatingSheet: View {
             }
             .onAppear {
                 setInitialVenue()
+                setInitialDrinkDetails()
             }
+        }
+    }
+
+    func setInitialDrinkDetails() {
+        if let name = initialDrinkName {
+            drinkName = name
+        }
+        if let category = initialCategory {
+            drinkCategory = category
+        }
+        if let varietal = initialVarietal {
+            wineDetails.varietal = varietal
+        }
+        if let style = initialWineStyle {
+            wineDetails.style = style
         }
     }
 
@@ -301,22 +616,9 @@ struct AddRatingSheet: View {
 
         print("DEBUG: submitPost called - selectedImages count: \(selectedImages.count)")
 
-        // Convert category-specific details to API format
-        var beerDetailsReq: BeerDetailsRequest?
-        var wineDetailsReq: WineDetailsRequest?
-        var cocktailDetailsReq: CocktailDetailsRequest?
-
-        switch drinkCategory {
-        case .beer:
-            beerDetailsReq = BeerDetailsRequest(
-                brewery: beerDetails.brewery ?? "",
-                abv: Double(beerDetails.abv ?? "0") ?? 0.0,
-                ibu: Int32(beerDetails.ibu ?? "0") ?? 0,
-                acidity: beerDetails.mouthfeel?.rawValue ?? "",
-                beerStyle: beerDetails.style?.rawValue ?? "",
-                serving: beerDetails.servingType?.rawValue ?? ""
-            )
-        case .wine:
+        // Convert wine details if any are filled out
+        var wineDetailsReq: WineDetailsRequest? = nil
+        if drinkCategory == .wine {
             wineDetailsReq = WineDetailsRequest(
                 sweetness: wineDetails.sweetness?.rawValue ?? "",
                 body: wineDetails.body?.rawValue ?? "",
@@ -328,19 +630,6 @@ struct AddRatingSheet: View {
                 vintage: wineDetails.vintage ?? "",
                 winery: wineDetails.winery ?? ""
             )
-        case .cocktail:
-            cocktailDetailsReq = CocktailDetailsRequest(
-                baseSpirit: cocktailDetails.baseSpirit?.rawValue ?? "",
-                cocktailFamily: cocktailDetails.cocktailFamily?.rawValue ?? "",
-                preparation: cocktailDetails.preparationStyle?.rawValue ?? "",
-                presentation: cocktailDetails.glassType?.rawValue ?? "",
-                garnish: cocktailDetails.garnish ?? "",
-                sweetness: cocktailDetails.sweetness?.rawValue ?? "",
-                booziness: cocktailDetails.booziness?.rawValue ?? "",
-                balance: cocktailDetails.balance?.rawValue ?? ""
-            )
-        case .other:
-            break
         }
 
         // Build venueDetails if we have a discovered venue
@@ -370,9 +659,9 @@ struct AddRatingSheet: View {
             drinkCategory: drinkCategory.rawValue,
             stars: rating,
             notes: notes,
-            beerDetails: beerDetailsReq,
+            beerDetails: nil,
             wineDetails: wineDetailsReq,
-            cocktailDetails: cocktailDetailsReq,
+            cocktailDetails: nil,
             venueDetails: venueDetailsReq
         )
 
@@ -402,7 +691,89 @@ struct AddRatingSheet: View {
         isSubmitting = false
 
         if success {
-            dismiss()
+            // Refresh posts to get the new one
+            await postsManager.fetchPosts()
+
+            // Find the drink collection for this drink
+            // Convert posts to ratings
+            let ratings = postsManager.posts.compactMap { post -> Rating? in
+                guard let postUUID = UUID(uuidString: post.id),
+                      let createdDate = ISO8601DateFormatter().date(from: post.createdAt) else {
+                    return nil
+                }
+
+                let category = DrinkCategory(rawValue: post.drinkCategory) ?? .other
+                let venueUUID = post.venueId.flatMap { UUID(uuidString: $0) }
+
+                // Convert media items
+                let media = post.media?.map { mediaResponse in
+                    MediaItem(
+                        id: mediaResponse.id,
+                        url: mediaResponse.url,
+                        fullUrl: mediaResponse.fullUrl,
+                        objectKey: mediaResponse.objectKey,
+                        width: mediaResponse.width,
+                        height: mediaResponse.height
+                    )
+                }
+
+                return Rating(
+                    id: postUUID,
+                    venueId: venueUUID,
+                    drinkName: post.drinkName,
+                    category: category,
+                    stars: post.stars,
+                    notes: post.notes,
+                    dateLogged: createdDate,
+                    photoNames: [],
+                    media: media,
+                    tags: [],
+                    wineDetails: nil,
+                    beerDetails: nil,
+                    cocktailDetails: nil
+                )
+            }
+
+            // Find the collection for this drink
+            let grouped = Dictionary(grouping: ratings) { rating in
+                let varietal = rating.wineDetails?.varietal ?? ""
+                return "\(rating.drinkName.lowercased())_\(rating.category.rawValue)_\(varietal.lowercased())"
+            }
+
+            let collections = grouped.map { key, tastings in
+                let first = tastings.first!
+                return DrinkCollection(
+                    id: key,
+                    name: first.drinkName,
+                    category: first.category,
+                    tastings: tastings.sorted { $0.dateLogged > $1.dateLogged }
+                )
+            }
+
+            // Find the collection matching our new drink (including varietal for wines)
+            if let targetCollection = collections.first(where: {
+                let nameMatches = $0.name.lowercased() == drinkName.lowercased()
+                let categoryMatches = $0.category == drinkCategory
+
+                // For wines, also match varietal
+                if drinkCategory == .wine {
+                    let varietalMatches = $0.latestTasting?.wineDetails?.varietal?.lowercased() == wineDetails.varietal?.lowercased()
+                    return nameMatches && categoryMatches && varietalMatches
+                }
+
+                return nameMatches && categoryMatches
+            }) {
+                // Dismiss the sheet first
+                dismiss()
+
+                // Then navigate to the collection detail
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    coordinator.navigateToDrinkCollection(targetCollection)
+                }
+            } else {
+                // Fallback: just dismiss
+                dismiss()
+            }
         }
     }
 
@@ -625,6 +996,80 @@ struct GenericDrinkForm: View {
             .cornerRadius(16)
             .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
         }
+    }
+}
+
+// MARK: - Helper Components
+
+struct CategoryButton: View {
+    let category: DrinkCategory
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var categoryColor: Color {
+        switch category {
+        case .beer: return .orange
+        case .wine: return .purple
+        case .cocktail: return .blue
+        case .other: return .gray
+        }
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            Text(category.rawValue.capitalized)
+                .font(.system(size: 15, weight: isSelected ? .semibold : .medium))
+                .foregroundColor(isSelected ? categoryColor : .secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(isSelected ? categoryColor.opacity(0.12) : Color(.systemGray6))
+                .cornerRadius(20)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(isSelected ? categoryColor : Color.clear, lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct CompactWineStylePill: View {
+    let style: WineStyle
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    var styleColor: Color {
+        switch style {
+        case .red: return Color(red: 0.5, green: 0.1, blue: 0.1)
+        case .white: return Color(red: 0.9, green: 0.85, blue: 0.4)
+        case .rose: return Color(red: 0.9, green: 0.5, blue: 0.6)
+        case .orange: return Color.orange
+        case .sparkling: return Color(red: 0.95, green: 0.95, blue: 0.7)
+        case .dessert: return Color(red: 0.6, green: 0.4, blue: 0.2)
+        }
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(styleColor)
+                    .frame(width: 10, height: 10)
+
+                Text(style.rawValue)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.purple.opacity(0.12) : Color(.systemGray6))
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? Color.purple : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
