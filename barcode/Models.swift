@@ -19,9 +19,16 @@ struct DrinkCollection: Identifiable {
     }
 
     var averageRating: Double? {
-        let rated = tastings.compactMap { $0.stars }
-        guard !rated.isEmpty else { return nil }
-        return Double(rated.reduce(0, +)) / Double(rated.count)
+        // Prefer score over stars
+        let scores = tastings.compactMap { $0.score }
+        if !scores.isEmpty {
+            return scores.reduce(0, +) / Double(scores.count)
+        }
+
+        // Fallback to stars for backward compatibility (convert to 0-10 scale)
+        let stars = tastings.compactMap { $0.stars }
+        guard !stars.isEmpty else { return nil }
+        return Double(stars.reduce(0, +)) * 2.0 / Double(stars.count) // Convert 1-5 stars to 0-10 scale
     }
 
     var lastTried: Date? {
@@ -350,7 +357,8 @@ struct Rating: Identifiable, Codable {
     var venueId: UUID?
     var drinkName: String
     var category: DrinkCategory
-    var stars: Int?
+    var stars: Int? // Deprecated - kept for backward compatibility
+    var score: Double? // New: 0.0-10.0 decimal score
     var notes: String?
     var dateLogged: Date
 
@@ -369,6 +377,7 @@ struct Rating: Identifiable, Codable {
         drinkName: String,
         category: DrinkCategory,
         stars: Int? = nil,
+        score: Double? = nil,
         notes: String? = nil,
         dateLogged: Date = Date(),
         photoNames: [String] = [],
@@ -383,6 +392,7 @@ struct Rating: Identifiable, Codable {
         self.drinkName = drinkName
         self.category = category
         self.stars = stars.map { min(max($0, 1), 5) }
+        self.score = score.map { min(max($0, 0.0), 10.0) } // Clamp to 0.0-10.0
         self.notes = notes
         self.dateLogged = dateLogged
         self.photoNames = photoNames

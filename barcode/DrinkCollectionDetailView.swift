@@ -95,14 +95,9 @@ struct DrinkCollectionDetailView: View {
                         // Average rating
                         if let avgRating = collection.averageRating {
                             VStack(spacing: 4) {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "star.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.yellow)
-                                    Text(String(format: "%.1f", avgRating))
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(.primary)
-                                }
+                                Text(String(format: "%.1f", avgRating))
+                                    .font(.system(size: 24, weight: .bold))
+                                    .foregroundColor(.primary)
                                 Text("Average")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
@@ -274,8 +269,15 @@ struct TastingRowCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 // Rating + date
                 HStack(spacing: 6) {
-                    if let stars = tasting.stars {
-                        StarRatingView(rating: stars, size: 14)
+                    if let score = tasting.score {
+                        Text(String(format: "%.1f", score))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                    } else if let stars = tasting.stars {
+                        // Fallback for old star ratings
+                        Text(String(format: "%.1f", Double(stars) * 2.0))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
 
                     Text("•")

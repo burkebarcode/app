@@ -12,8 +12,8 @@ struct BarcodeLoader: View {
     private let widths:  [CGFloat] = [11, 9, 11, 9, 11]
 
     // Tuning knobs
-    private let minScale: CGFloat = 0.30
-    private let maxScale: CGFloat = 1.05
+    private let minScale: CGFloat = 0.25
+    private let maxScale: CGFloat = 0.90
     private let duration: Double  = 0.42   // snappier
     private let stagger: Double   = 0.13   // more wave-like
 

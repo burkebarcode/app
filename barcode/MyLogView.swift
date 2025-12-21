@@ -114,6 +114,7 @@ struct MyLogView: View {
             drinkName: post.drinkName,
             category: category,
             stars: post.stars,
+            score: post.score,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -600,6 +601,7 @@ struct VenueLogCardSimple: View {
             drinkName: post.drinkName,
             category: category,
             stars: post.stars,
+            score: post.score,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -770,6 +772,7 @@ struct VenueLogCard: View {
             drinkName: post.drinkName,
             category: category,
             stars: post.stars,
+            score: post.score,
             notes: post.notes,
             dateLogged: createdDate,
             photoNames: [],
@@ -894,8 +897,14 @@ struct CompactRatingRow: View {
                     .foregroundColor(.primary)
 
                 HStack(spacing: 6) {
-                    if let stars = rating.stars {
-                        StarRatingView(rating: stars, size: 12)
+                    if let score = rating.score {
+                        Text(String(format: "%.1f", score))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
+                    } else if let stars = rating.stars {
+                        Text(String(format: "%.1f", Double(stars) * 2.0))
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
 
                     Text("•")
@@ -1095,8 +1104,14 @@ struct TimelineRatingCard: View {
                     .foregroundColor(.primary)
 
                 HStack(spacing: 6) {
-                    if let stars = rating.stars {
-                        StarRatingView(rating: stars, size: 14)
+                    if let score = rating.score {
+                        Text(String(format: "%.1f", score))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
+                    } else if let stars = rating.stars {
+                        Text(String(format: "%.1f", Double(stars) * 2.0))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.primary)
                     }
 
                     Text("•")

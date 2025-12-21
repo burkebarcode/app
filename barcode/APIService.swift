@@ -322,6 +322,7 @@ class APIService {
         drinkName: String,
         drinkCategory: String,
         stars: Int? = nil,
+        score: Double? = nil,
         notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
@@ -345,6 +346,7 @@ class APIService {
             drinkName: drinkName,
             drinkCategory: drinkCategory,
             stars: stars,
+            score: score,
             notes: notes,
             beerDetails: beerDetails,
             wineDetails: wineDetails,
@@ -505,7 +507,8 @@ struct CreatePostRequest: Codable {
     let venueId: String?
     let drinkName: String
     let drinkCategory: String
-    let stars: Int?
+    let stars: Int? // Deprecated - keep for backward compatibility
+    let score: Double? // New decimal score 0.0-10.0
     let notes: String?
     let beerDetails: BeerDetailsRequest?
     let wineDetails: WineDetailsRequest?
@@ -516,7 +519,7 @@ struct CreatePostRequest: Codable {
         case venueId = "venue_id"
         case drinkName = "drink_name"
         case drinkCategory = "drink_category"
-        case stars, notes
+        case stars, score, notes
         case beerDetails
         case wineDetails
         case cocktailDetails
@@ -631,7 +634,8 @@ struct PostResponse: Codable, Identifiable {
     let venueId: String?
     let drinkName: String
     let drinkCategory: String
-    let stars: Int?
+    let stars: Int? // Deprecated - kept for backward compatibility
+    let score: Double? // New decimal score 0.0-10.0
     let notes: String?
     let wineDetails: WineDetailsResponse?
     let beerDetails: BeerDetailsResponse?
@@ -646,7 +650,7 @@ struct PostResponse: Codable, Identifiable {
         case venueId = "venue_id"
         case drinkName = "drink_name"
         case drinkCategory = "drink_category"
-        case stars, notes
+        case stars, score, notes
         case wineDetails, beerDetails, cocktailDetails
         case media
         case createdAt = "created_at"

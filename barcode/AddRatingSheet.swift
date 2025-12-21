@@ -26,7 +26,8 @@ struct AddRatingSheet: View {
     @State private var showingVenueSearch = false
     @State private var drinkCategory: DrinkCategory = .wine
     @State private var drinkName: String = ""
-    @State private var rating: Int = 3
+    @State private var rating: Int = 3 // Deprecated - keeping for backward compatibility
+    @State private var score: Double = 7.5 // New decimal score
     @State private var notes: String = ""
     @State private var isSubmitting: Bool = false
     @State private var showingSuggestions: Bool = false
@@ -253,29 +254,7 @@ struct AddRatingSheet: View {
 
                     // Section 3: How was it? (required)
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("How was it?")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.primary)
-
-                        HStack {
-                            Spacer()
-                            StarRatingView(
-                                rating: rating,
-                                size: 40,
-                                interactive: true,
-                                onRatingChanged: { newRating in
-                                    rating = newRating
-                                }
-                            )
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-
-                        // Show numeric value
-                        Text("\(rating).0")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
+                        ScoreSlider(score: $score)
                     }
 
                     // Section 4: Quick note (optional but encouraged)
@@ -657,7 +636,8 @@ struct AddRatingSheet: View {
             venueId: discoveredVenue == nil ? selectedVenue?.id.uuidString : nil,
             drinkName: drinkName,
             drinkCategory: drinkCategory.rawValue,
-            stars: rating,
+            stars: nil, // Deprecated - no longer using stars
+            score: score,
             notes: notes,
             beerDetails: nil,
             wineDetails: wineDetailsReq,
@@ -717,20 +697,66 @@ struct AddRatingSheet: View {
                     )
                 }
 
+                // Convert wine details
+                let wineDetails: WineDetails? = post.wineDetails.map { wd in
+                    WineDetails(
+                        varietal: wd.varietal,
+                        region: wd.region,
+                        vintage: wd.vintage,
+                        style: wd.wineStyle.flatMap { WineStyle(rawValue: $0) },
+                        sweetness: wd.sweetness.flatMap { SweetnessLevel(rawValue: $0) },
+                        body: wd.body.flatMap { WineBody(rawValue: $0) },
+                        tannin: wd.tannin.flatMap { TastingLevel(rawValue: $0) },
+                        acidity: wd.acidity.flatMap { TastingLevel(rawValue: $0) },
+                        winery: wd.winery
+                    )
+                }
+
+                // Convert beer details
+                let beerDetails: BeerDetails? = post.beerDetails.map { bd in
+                    BeerDetails(
+                        style: bd.beerStyle.flatMap { BeerStyle(rawValue: $0) },
+                        brewery: bd.brewery,
+                        abv: bd.abv.map { String($0) },
+                        ibu: bd.ibu.map { String($0) },
+                        servingType: bd.serving.flatMap { ServingType(rawValue: $0) },
+                        bitterness: nil,
+                        hoppiness: nil,
+                        maltiness: nil,
+                        mouthfeel: nil
+                    )
+                }
+
+                // Convert cocktail details
+                let cocktailDetails: CocktailDetails? = post.cocktailDetails.map { cd in
+                    CocktailDetails(
+                        baseSpirit: cd.baseSpirit.flatMap { BaseSpirit(rawValue: $0) },
+                        cocktailFamily: cd.cocktailFamily.flatMap { CocktailFamily(rawValue: $0) },
+                        preparationStyle: cd.preparation.flatMap { PreparationStyle(rawValue: $0) },
+                        glassType: cd.presentation.flatMap { GlassType(rawValue: $0) },
+                        garnish: cd.garnish,
+                        sweetness: cd.sweetness.flatMap { BalanceLevel(rawValue: $0) },
+                        booziness: cd.booziness.flatMap { BalanceLevel(rawValue: $0) },
+                        balance: cd.balance.flatMap { BalanceLevel(rawValue: $0) },
+                        recipeNotes: nil
+                    )
+                }
+
                 return Rating(
                     id: postUUID,
                     venueId: venueUUID,
                     drinkName: post.drinkName,
                     category: category,
                     stars: post.stars,
+                    score: post.score,
                     notes: post.notes,
                     dateLogged: createdDate,
                     photoNames: [],
                     media: media,
                     tags: [],
-                    wineDetails: nil,
-                    beerDetails: nil,
-                    cocktailDetails: nil
+                    wineDetails: wineDetails,
+                    beerDetails: beerDetails,
+                    cocktailDetails: cocktailDetails
                 )
             }
 

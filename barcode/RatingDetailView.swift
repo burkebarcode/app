@@ -144,14 +144,25 @@ struct RatingDetailView: View {
 
             // Rating - Large and prominent with numeric value
             HStack(spacing: 8) {
-                StarRatingView(rating: rating.stars ?? 0, size: 20)
-                if let stars = rating.stars {
-                    Text("\(stars).0")
-                        .font(.system(size: 20, weight: .semibold))
+                if let score = rating.score {
+                    Text(String(format: "%.1f", score))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundColor(.primary)
+                } else if let stars = rating.stars {
+                    // Fallback for old star ratings - convert to 0-10 scale
+                    Text(String(format: "%.1f", Double(stars) * 2.0))
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.primary)
+                } else {
+                    Text("No rating")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
                 }
             }
             .padding(.top, 4)
+            .onAppear {
+                print("DEBUG RatingDetailView: score=\(String(describing: rating.score)), stars=\(String(describing: rating.stars))")
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
