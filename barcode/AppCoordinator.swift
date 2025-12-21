@@ -10,7 +10,7 @@ import Combine
 
 @MainActor
 class AppCoordinator: ObservableObject {
-    @Published var selectedTab: Int = 0
+    @Published var selectedTab: Int = 1 // Start on My Log tab
     @Published var shouldOpenAddRating: Bool = false
     @Published var preselectedVenue: Venue?
     @Published var preselectedVenueFromDiscovery: DiscoveredVenue?

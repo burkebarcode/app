@@ -14,6 +14,7 @@ class AuthManager: ObservableObject {
     @Published var currentUser: User?
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isCheckingAuth: Bool = true // Track initial auth check
 
     private let apiService = APIService.shared
     private let tokenManager = TokenManager.shared
@@ -26,6 +27,8 @@ class AuthManager: ObservableObject {
     }
 
     private func checkAuthentication() async {
+        let startTime = Date()
+
         // If we have tokens, fetch user info
         if tokenManager.isAuthenticated, let userId = tokenManager.userId {
             do {
@@ -44,6 +47,14 @@ class AuthManager: ObservableObject {
                 self.isAuthenticated = false
             }
         }
+
+        // Ensure loader shows for at least 1.5 seconds
+        let elapsed = Date().timeIntervalSince(startTime)
+        if elapsed < 1.5 {
+            try? await Task.sleep(nanoseconds: UInt64((1.5 - elapsed) * 1_000_000_000))
+        }
+
+        self.isCheckingAuth = false // Done checking
     }
 
     func signUp(email: String, handle: String, password: String) async {

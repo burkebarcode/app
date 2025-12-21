@@ -95,7 +95,7 @@ struct ExploreView: View {
                             BarcodeLoader()
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 105)
+                        .padding(.top, 155)
                     } else if let error = searchManager.errorMessage {
                         VStack(spacing: 16) {
                             Image(systemName: "exclamationmark.triangle")
