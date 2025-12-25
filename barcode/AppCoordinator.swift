@@ -16,6 +16,14 @@ class AppCoordinator: ObservableObject {
     @Published var preselectedVenueFromDiscovery: DiscoveredVenue?
     @Published var navigateToCollection: DrinkCollection?
 
+    // Pre-filled beverage data from scan
+    @Published var prefilledDrinkName: String?
+    @Published var prefilledCategory: DrinkCategory?
+    @Published var prefilledVarietal: String?
+    @Published var prefilledWineStyle: WineStyle?
+    @Published var prefilledVintage: String?
+    @Published var prefilledRegion: String?
+
     func logDrinkAtVenue(_ venue: DiscoveredVenue) {
         // Convert DiscoveredVenue to Venue
         let mappedVenue = Venue(
@@ -36,6 +44,12 @@ class AppCoordinator: ObservableObject {
         shouldOpenAddRating = false
         preselectedVenue = nil
         preselectedVenueFromDiscovery = nil
+        prefilledDrinkName = nil
+        prefilledCategory = nil
+        prefilledVarietal = nil
+        prefilledWineStyle = nil
+        prefilledVintage = nil
+        prefilledRegion = nil
     }
 
     func navigateToDrinkCollection(_ collection: DrinkCollection) {

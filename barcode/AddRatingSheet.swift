@@ -16,6 +16,8 @@ struct AddRatingSheet: View {
     let initialCategory: DrinkCategory?
     let initialVarietal: String?
     let initialWineStyle: WineStyle?
+    let initialVintage: String?
+    let initialRegion: String?
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var dataStore: DataStore
@@ -52,7 +54,9 @@ struct AddRatingSheet: View {
         initialDrinkName: String? = nil,
         initialCategory: DrinkCategory? = nil,
         initialVarietal: String? = nil,
-        initialWineStyle: WineStyle? = nil
+        initialWineStyle: WineStyle? = nil,
+        initialVintage: String? = nil,
+        initialRegion: String? = nil
     ) {
         self.initialVenue = initialVenue
         self.discoveredVenue = discoveredVenue
@@ -60,6 +64,8 @@ struct AddRatingSheet: View {
         self.initialCategory = initialCategory
         self.initialVarietal = initialVarietal
         self.initialWineStyle = initialWineStyle
+        self.initialVintage = initialVintage
+        self.initialRegion = initialRegion
     }
 
     var canSave: Bool {
@@ -76,34 +82,34 @@ struct AddRatingSheet: View {
                 "Cabernet Sauvignon", "Merlot", "Pinot Noir", "Syrah", "Shiraz",
                 "Malbec", "Zinfandel", "Tempranillo", "Sangiovese", "Nebbiolo",
                 "Grenache", "Barbera", "Petite Sirah", "Carmenere", "Mourvedre",
-                "Cabernet Franc", "Gamay", "Primitivo", "Touriga Nacional", "Other"
+                "Cabernet Franc", "Gamay", "Primitivo", "Touriga Nacional", "Blend", "Other"
             ]
         case .white:
             return [
                 "Chardonnay", "Sauvignon Blanc", "Pinot Grigio", "Pinot Gris", "Riesling",
                 "Moscato", "Gewürztraminer", "Viognier", "Albariño", "Grüner Veltliner",
                 "Chenin Blanc", "Semillon", "Torrontés", "Vermentino", "Assyrtiko",
-                "Soave", "Garganega", "Fiano", "Verdejo", "Other"
+                "Soave", "Garganega", "Fiano", "Verdejo", "Blend", "Other"
             ]
         case .rose:
             return [
                 "Grenache Rosé", "Syrah Rosé", "Pinot Noir Rosé", "Sangiovese Rosé",
-                "Tempranillo Rosé", "Mourvèdre Rosé", "Provence Blend", "Other"
+                "Tempranillo Rosé", "Mourvèdre Rosé", "Provence Blend", "Blend", "Other"
             ]
         case .orange:
             return [
                 "Pinot Grigio", "Ribolla Gialla", "Friulano", "Sauvignon Blanc",
-                "Rkatsiteli", "Mtsvane", "Other"
+                "Rkatsiteli", "Mtsvane", "Blend", "Other"
             ]
         case .sparkling:
             return [
                 "Champagne", "Prosecco", "Cava", "Crémant", "Franciacorta",
-                "Lambrusco", "Sekt", "Pét-Nat", "Other"
+                "Lambrusco", "Sekt", "Pét-Nat", "Blend", "Other"
             ]
         case .dessert:
             return [
                 "Port", "Sauternes", "Ice Wine", "Late Harvest", "Moscato d'Asti",
-                "Tokaji", "Vin Santo", "Pedro Ximénez", "Madeira", "Other"
+                "Tokaji", "Vin Santo", "Pedro Ximénez", "Madeira", "Blend", "Other"
             ]
         }
     }
@@ -588,6 +594,12 @@ struct AddRatingSheet: View {
         if let style = initialWineStyle {
             wineDetails.style = style
         }
+        if let vintage = initialVintage {
+            wineDetails.vintage = vintage
+        }
+        if let region = initialRegion {
+            wineDetails.region = region
+        }
     }
 
     func submitPost() async {
@@ -945,7 +957,7 @@ struct CategoryPill: View {
 
 struct GenericDrinkForm: View {
     @Binding var drinkName: String
-    @Binding var rating: Int
+    @Binding var score: Double
     @Binding var notes: String
 
     var body: some View {
@@ -970,26 +982,8 @@ struct GenericDrinkForm: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.primary)
 
-                // Rating section
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Rating")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        Spacer()
-                        StarRatingView(
-                            rating: rating,
-                            size: 36,
-                            interactive: true,
-                            onRatingChanged: { newRating in
-                                rating = newRating
-                            }
-                        )
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                }
+                // Score
+                ScoreSlider(score: $score)
 
                 Divider()
 

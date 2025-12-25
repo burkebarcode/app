@@ -33,11 +33,187 @@ struct RatingDetailView: View {
         }
     }
 
+    // MARK: - Computed Insights
+
+    var scoreContext: (text: String, isPositive: Bool)? {
+        guard let currentScore = rating.score ?? rating.stars.map({ Double($0) * 2.0 }) else { return nil }
+
+        // Get all ratings from posts
+        let allRatings = postsManager.posts.compactMap { post -> Double? in
+            if let score = post.score {
+                return score
+            } else if let stars = post.stars {
+                return Double(stars) * 2.0
+            }
+            return nil
+        }
+
+        guard allRatings.count > 1 else { return nil }
+
+        let average = allRatings.reduce(0, +) / Double(allRatings.count)
+        let difference = currentScore - average
+
+        // Calculate percentile
+        let sorted = allRatings.sorted()
+        let rank = sorted.filter { $0 <= currentScore }.count
+        let percentile = (Double(rank) / Double(sorted.count)) * 100
+
+        if percentile >= 90 {
+            return ("One of your highest-rated", true)
+        } else if percentile >= 75 {
+            return ("Well above your average", true)
+        } else if difference > 0.3 {
+            return ("Above your average", true)
+        } else if abs(difference) < 0.3 {
+            return ("Right at your average (\(String(format: "%.1f", average)))", false)
+        } else {
+            return ("Below your average (\(String(format: "%.1f", average)))", false)
+        }
+    }
+
+    var venueContext: String? {
+        guard let currentVenue = venue else { return nil }
+
+        // Count tastings at this venue
+        let venuePostsCount = postsManager.posts.filter { post in
+            post.venueId == currentVenue.id.uuidString
+        }.count
+
+        if venuePostsCount > 1 {
+            return "You've logged \(venuePostsCount) drinks here"
+        }
+
+        return nil
+    }
+
+    func hasWineIdentity(_ wineDetails: WineDetails) -> Bool {
+        return wineDetails.varietal != nil ||
+               wineDetails.region != nil ||
+               wineDetails.vintage != nil ||
+               wineDetails.winery != nil
+    }
+
+    func hasFlavorProfile(_ wineDetails: WineDetails) -> Bool {
+        return wineDetails.sweetness != nil ||
+               wineDetails.body != nil ||
+               wineDetails.tannin != nil ||
+               wineDetails.acidity != nil
+    }
+
+    func flavorSummary(for wineDetails: WineDetails) -> String {
+        var parts: [String] = []
+
+        // Sweetness
+        if let sweetness = wineDetails.sweetness {
+            switch sweetness {
+            case .dry: parts.append("Dry")
+            case .offDry: parts.append("Dry-leaning")
+            case .semiSweet: parts.append("Semi-sweet")
+            case .sweet: parts.append("Sweet")
+            }
+        }
+
+        // Body
+        if let body = wineDetails.body {
+            switch body {
+            case .light: parts.append("light-bodied")
+            case .medium: parts.append("medium-bodied")
+            case .full: parts.append("full-bodied")
+            }
+        }
+
+        // Acidity
+        if let acidity = wineDetails.acidity {
+            switch acidity {
+            case .low: parts.append("soft acidity")
+            case .medium: parts.append("balanced acidity")
+            case .high: parts.append("bright acidity")
+            }
+        }
+
+        return parts.isEmpty ? "" : parts.joined(separator: ", ")
+    }
+
+    var insightText: (headline: String, detail: String?)? {
+        guard let currentScore = rating.score ?? rating.stars.map({ Double($0) * 2.0 }) else { return nil }
+
+        // Get similar drinks (same category and name if wine with same varietal)
+        let similarPosts = postsManager.posts.filter { post in
+            guard post.drinkCategory == rating.category.rawValue else { return false }
+            guard post.drinkName.lowercased() == rating.drinkName.lowercased() else { return false }
+
+            // For wines, also match varietal
+            if rating.category == .wine {
+                let thisVarietal = rating.wineDetails?.varietal?.lowercased() ?? ""
+                let postVarietal = post.wineDetails?.varietal?.lowercased() ?? ""
+                return thisVarietal == postVarietal
+            }
+
+            return true
+        }
+
+        // Pattern: Multiple tastings of the same drink
+        if similarPosts.count > 1 {
+            let scores = similarPosts.compactMap { post -> Double? in
+                if let score = post.score {
+                    return score
+                } else if let stars = post.stars {
+                    return Double(stars) * 2.0
+                }
+                return nil
+            }.sorted()
+
+            if let lowest = scores.first, let highest = scores.last {
+                let avg = scores.reduce(0, +) / Double(scores.count)
+                let detail = "\(scores.count) times tried · Avg \(String(format: "%.1f", avg))"
+
+                if currentScore == highest {
+                    return ("You consistently enjoy this.", detail)
+                } else if currentScore == lowest {
+                    return ("This one didn't land as well.", detail)
+                } else if abs(currentScore - avg) < 0.5 {
+                    return ("This has held up over time.", detail)
+                } else {
+                    return ("You rate this reliably high.", detail)
+                }
+            }
+        }
+
+        // Pattern: Category preference
+        let categoryScores = postsManager.posts.filter { $0.drinkCategory == rating.category.rawValue }
+            .compactMap { post -> Double? in
+                if let score = post.score {
+                    return score
+                } else if let stars = post.stars {
+                    return Double(stars) * 2.0
+                }
+                return nil
+            }
+
+        if categoryScores.count >= 3 {
+            let categoryAvg = categoryScores.reduce(0, +) / Double(categoryScores.count)
+            let categoryName = rating.category.rawValue.capitalized
+
+            if currentScore > categoryAvg + 0.5 {
+                return ("Exceptional for your palate.", nil)
+            } else if currentScore < categoryAvg - 0.5 {
+                return ("Not your usual \(categoryName) preference.", nil)
+            }
+        }
+
+        return nil
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 // MARK: - Hero Header Card
                 heroHeader
+
+                // MARK: - Insight Card
+                if let insight = insightText {
+                    insightCard(headline: insight.headline, detail: insight.detail)
+                }
 
                 // MARK: - Photo Gallery
                 if let media = rating.media, !media.isEmpty {
@@ -46,8 +222,12 @@ struct RatingDetailView: View {
 
                 // MARK: - Wine-Specific Sections
                 if rating.category == .wine, let wineDetails = rating.wineDetails {
-                    wineIdentityCard(wineDetails: wineDetails)
-                    flavorProfileCard(wineDetails: wineDetails)
+                    if hasWineIdentity(wineDetails) {
+                        wineIdentityCard(wineDetails: wineDetails)
+                    }
+                    if hasFlavorProfile(wineDetails) {
+                        flavorProfileCard(wineDetails: wineDetails)
+                    }
                 }
 
                 // MARK: - Beer-Specific Sections
@@ -62,14 +242,14 @@ struct RatingDetailView: View {
                     cocktailFlavorProfileCard(cocktailDetails: cocktailDetails)
                 }
 
+                // MARK: - Venue (moved above notes for prominence)
+                if let venue = venue {
+                    venueCard(venue: venue)
+                }
+
                 // MARK: - Tasting Notes
                 if let notes = rating.notes, !notes.isEmpty {
                     tastingNotesCard(notes: notes)
-                }
-
-                // MARK: - Venue
-                if let venue = venue {
-                    venueCard(venue: venue)
                 }
 
                 Spacer(minLength: 20)
@@ -133,9 +313,9 @@ struct RatingDetailView: View {
                     .foregroundColor(Color(.tertiaryLabel))
             }
 
-            // Drink Name - Largest element on screen
+            // Drink Name
             Text(rating.drinkName)
-                .font(.system(size: 34, weight: .bold))
+                .font(.system(size: 28, weight: .bold))
                 .foregroundColor(.primary)
                 .lineLimit(3)
 
@@ -143,26 +323,32 @@ struct RatingDetailView: View {
             identityChipsRow
 
             // Rating - Large and prominent with numeric value
-            HStack(spacing: 8) {
-                if let score = rating.score {
-                    Text(String(format: "%.1f", score))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.primary)
-                } else if let stars = rating.stars {
-                    // Fallback for old star ratings - convert to 0-10 scale
-                    Text(String(format: "%.1f", Double(stars) * 2.0))
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.primary)
-                } else {
-                    Text("No rating")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if let score = rating.score {
+                        Text(String(format: "%.1f", score))
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.primary)
+                    } else if let stars = rating.stars {
+                        // Fallback for old star ratings - convert to 0-10 scale
+                        Text(String(format: "%.1f", Double(stars) * 2.0))
+                            .font(.system(size: 32, weight: .bold))
+                            .foregroundColor(.primary)
+                    } else {
+                        Text("No rating")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Relative context - elevated as secondary hero line
+                if let context = scoreContext {
+                    Text(context.text)
+                        .font(.system(size: 17))
+                        .foregroundColor(context.isPositive ? Color.green.opacity(0.85) : .secondary)
                 }
             }
             .padding(.top, 4)
-            .onAppear {
-                print("DEBUG RatingDetailView: score=\(String(describing: rating.score)), stars=\(String(describing: rating.stars))")
-            }
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -241,11 +427,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Wine Flavor Profile Card
@@ -254,6 +440,15 @@ struct RatingDetailView: View {
             Text("Flavor Profile")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.primary)
+
+            // Overall summary
+            let summary = flavorSummary(for: wineDetails)
+            if !summary.isEmpty {
+                Text("Overall: \(summary)")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, 4)
+            }
 
             VStack(spacing: 16) {
                 if let sweetness = wineDetails.sweetness {
@@ -294,11 +489,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Beer Identity Card
@@ -326,11 +521,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Beer Flavor Profile Card
@@ -370,11 +565,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Cocktail Identity Card
@@ -402,11 +597,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Cocktail Flavor Profile Card
@@ -446,11 +641,11 @@ struct RatingDetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
     }
 
     // MARK: - Tasting Notes Card
@@ -466,11 +661,36 @@ struct RatingDetailView: View {
                 .lineSpacing(6)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(20)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemBackground))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+        .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
+    }
+
+    // MARK: - Insight Card
+    private func insightCard(headline: String, detail: String?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Your Pattern")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .tracking(0.3)
+
+            Text(headline)
+                .font(.system(size: 16))
+                .foregroundColor(.primary)
+
+            if let detail = detail {
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.02), radius: 3, x: 0, y: 1)
     }
 
     // MARK: - Venue Card
@@ -512,12 +732,6 @@ struct RatingDetailView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("ENJOYED AT")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
-                        .tracking(0.5)
-
                     Text(venue.name)
                         .font(.body)
                         .fontWeight(.medium)
@@ -536,6 +750,13 @@ struct RatingDetailView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    if let context = venueContext {
+                        Text(context)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 2)
+                    }
                 }
 
                 Spacer()
@@ -547,7 +768,7 @@ struct RatingDetailView: View {
             .padding(16)
             .background(Color(.systemBackground))
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.02), radius: 4, x: 0, y: 1)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -659,12 +880,30 @@ struct FlavorProfileRow: View {
         }
     }
 
+    private var levelDescriptor: String {
+        switch level {
+        case .low: return leftLabel
+        case .medium: return "Medium"
+        case .high: return rightLabel
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.primary)
+            HStack(spacing: 6) {
+                Text(label)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Text("·")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Text(levelDescriptor)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
 
             // Dot indicator
             HStack(spacing: 6) {
@@ -974,7 +1213,7 @@ struct EditRatingSheet: View {
     @EnvironmentObject var postsManager: PostsManager
 
     @State private var drinkName: String
-    @State private var stars: Int
+    @State private var score: Double
     @State private var notes: String
     @State private var wineDetails: WineDetails
     @State private var beerDetails: BeerDetails
@@ -985,7 +1224,9 @@ struct EditRatingSheet: View {
         self.rating = rating
         self.venue = venue
         _drinkName = State(initialValue: rating.drinkName)
-        _stars = State(initialValue: rating.stars ?? 3)
+        // Convert stars to score or use score directly
+        let initialScore = rating.score ?? (rating.stars.map { Double($0) * 2.0 } ?? 7.5)
+        _score = State(initialValue: initialScore)
         _notes = State(initialValue: rating.notes ?? "")
         _wineDetails = State(initialValue: rating.wineDetails ?? WineDetails(varietal: nil, region: nil, vintage: nil, style: nil, sweetness: nil, body: nil, tannin: nil, acidity: nil, winery: nil))
         _beerDetails = State(initialValue: rating.beerDetails ?? BeerDetails(style: nil, brewery: nil, abv: nil, ibu: nil, servingType: nil, bitterness: nil, hoppiness: nil, maltiness: nil, mouthfeel: nil))
@@ -1011,7 +1252,7 @@ struct EditRatingSheet: View {
                         WineRatingForm(
                             wineName: $drinkName,
                             wineDetails: $wineDetails,
-                            rating: $stars,
+                            score: $score,
                             notes: $notes
                         )
                         .padding(.horizontal, 20)
@@ -1019,7 +1260,7 @@ struct EditRatingSheet: View {
                         BeerRatingForm(
                             beerName: $drinkName,
                             beerDetails: $beerDetails,
-                            rating: $stars,
+                            score: $score,
                             notes: $notes
                         )
                         .padding(.horizontal, 20)
@@ -1027,14 +1268,14 @@ struct EditRatingSheet: View {
                         CocktailRatingForm(
                             cocktailName: $drinkName,
                             cocktailDetails: $cocktailDetails,
-                            rating: $stars,
+                            score: $score,
                             notes: $notes
                         )
                         .padding(.horizontal, 20)
                     } else {
                         GenericDrinkForm(
                             drinkName: $drinkName,
-                            rating: $stars,
+                            score: $score,
                             notes: $notes
                         )
                         .padding(.horizontal, 20)
@@ -1114,7 +1355,7 @@ struct EditRatingSheet: View {
         let success = await postsManager.updatePost(
             postId: rating.id.uuidString,
             drinkName: drinkName,
-            stars: stars,
+            score: score,
             notes: notesValue,
             beerDetails: beerDetailsReq,
             wineDetails: wineDetailsReq,

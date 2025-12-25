@@ -71,8 +71,8 @@ struct UserResponse: Codable {
 class APIService {
     static let shared = APIService()
 
-    //let baseURL = "https://barcode-gateway.fly.dev"
-    let baseURL = "http://localhost:9000"
+    let baseURL = "https://barcode-gateway.fly.dev"
+    //let baseURL = "http://localhost:9000"
     private let tokenManager = TokenManager.shared
     private var refreshTask: Task<Void, Never>?
 
@@ -382,6 +382,7 @@ class APIService {
         postId: String,
         drinkName: String,
         stars: Int? = nil,
+        score: Double? = nil,
         notes: String? = nil,
         beerDetails: BeerDetailsRequest? = nil,
         wineDetails: WineDetailsRequest? = nil,
@@ -402,6 +403,7 @@ class APIService {
         let body = UpdatePostRequest(
             drinkName: drinkName,
             stars: stars,
+            score: score,
             notes: notes,
             beerDetails: beerDetails,
             wineDetails: wineDetails,
@@ -499,6 +501,127 @@ class APIService {
 
         return try await performRequest(request)
     }
+
+    // MARK: - Scan Endpoints
+
+    func scanBottle(
+        rawText: String,
+        tokens: [String],
+        brandGuess: String? = nil,
+        nameGuess: String? = nil,
+        vintageGuess: String? = nil,
+        includePhoto: Bool = false
+    ) async throws -> ScanBottleResponse {
+        try await ensureValidToken()
+
+        let url = URL(string: "\(baseURL)/v1/beverages/scan")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let body = ScanBottleRequest(
+            rawText: rawText,
+            tokens: tokens,
+            brandGuess: brandGuess,
+            nameGuess: nameGuess,
+            vintageGuess: vintageGuess,
+            includePhoto: includePhoto
+        )
+        request.httpBody = try JSONEncoder().encode(body)
+
+        return try await performRequest(request)
+    }
+
+    // MARK: - AI Summary Endpoints
+
+    func getBeverageSummary(beverageId: String) async throws -> BeverageSummaryResponse {
+        try await ensureValidToken()
+
+        let url = URL(string: "\(baseURL)/v1/beverages/\(beverageId)/summary")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        return try await performRequest(request)
+    }
+
+    func getSimilarBeverages(beverageId: String) async throws -> SimilarBeveragesResponse {
+        try await ensureValidToken()
+
+        let url = URL(string: "\(baseURL)/v1/beverages/\(beverageId)/similar")!
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+
+        if let token = tokenManager.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        return try await performRequest(request)
+    }
+
+    // MARK: - Recommendations Endpoints (Phase 3)
+
+    func getRecommendations(category: String, limit: Int = 20) async throws -> RecommendationResponse {
+        try await ensureValidToken()
+
+        guard let token = tokenManager.accessToken else {
+            throw APIError.invalidResponse
+        }
+
+        let urlString = "\(baseURL)/v1/users/me/recommendations?category=\(category)&limit=\(limit)"
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        return try await performRequest(request)
+    }
+
+    func submitFeedback(beverageId: String, feedbackType: String) async throws {
+        try await ensureValidToken()
+
+        guard let token = tokenManager.accessToken else {
+            throw APIError.invalidResponse
+        }
+
+        let urlString = "\(baseURL)/v1/users/me/recommendations/feedback"
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+
+        let feedbackReq = FeedbackRequest(beverageId: beverageId, feedbackType: feedbackType)
+        let jsonData = try JSONEncoder().encode(feedbackReq)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+    }
 }
 
 // MARK: - Post Models
@@ -548,6 +671,7 @@ struct VenueDetailsRequest: Codable {
 struct UpdatePostRequest: Codable {
     let drinkName: String
     let stars: Int?
+    let score: Double?
     let notes: String?
     let beerDetails: BeerDetailsRequest?
     let wineDetails: WineDetailsRequest?
@@ -555,7 +679,7 @@ struct UpdatePostRequest: Codable {
 
     enum CodingKeys: String, CodingKey {
         case drinkName = "drink_name"
-        case stars, notes
+        case stars, score, notes
         case beerDetails
         case wineDetails
         case cocktailDetails
@@ -740,5 +864,141 @@ struct VenueResponse: Codable, Identifiable {
         case hasCocktails = "has_cocktails"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Scan Models
+
+struct ScanBottleRequest: Codable {
+    let rawText: String
+    let tokens: [String]
+    let brandGuess: String?
+    let nameGuess: String?
+    let vintageGuess: String?
+    let includePhoto: Bool
+}
+
+struct ScanBottleResponse: Codable {
+    let query: ScanQuery
+    let candidates: [BeverageCandidate]
+    let noMatch: Bool
+}
+
+struct ScanQuery: Codable {
+    let rawText: String
+    let brand: String?
+    let name: String?
+    let vintage: String?
+}
+
+struct BeverageCandidate: Codable, Identifiable {
+    var id: String { beverageId }
+    let beverageId: String
+    let displayName: String
+    let brand: String?
+    let name: String?
+    let vintage: String?
+    let imageUrl: String?
+    let confidence: Double
+    let avgRating: Double
+    let reviewCount: Int
+    let topReviews: [ReviewItem]
+    let matchScore: Int? // Phase 3: personalized match 0-100
+    let matchReasons: [String]? // Phase 3: reasons for match
+}
+
+struct ReviewItem: Codable, Identifiable {
+    var id: String { reviewId }
+    let reviewId: String
+    let rating: Double
+    let note: String?
+    let userId: String
+    let createdAt: String
+}
+
+// MARK: - AI Summary Models
+
+struct BeverageSummaryResponse: Codable {
+    let summaryText: String?
+    let descriptors: [String]
+    let pros: [String]
+    let cons: [String]
+    let coverageScore: Double?
+    let sourceReviewCount: Int?
+    let status: String // "ready", "pending", "not_available", "failed"
+
+    enum CodingKeys: String, CodingKey {
+        case summaryText = "summary_text"
+        case descriptors, pros, cons
+        case coverageScore = "coverage_score"
+        case sourceReviewCount = "source_review_count"
+        case status
+    }
+}
+
+struct SimilarBeveragesResponse: Codable {
+    let beverageId: String
+    let similar: [SimilarBeverageItem]
+
+    enum CodingKeys: String, CodingKey {
+        case beverageId = "beverage_id"
+        case similar
+    }
+}
+
+struct SimilarBeverageItem: Codable, Identifiable {
+    var id: String { beverageId }
+    let beverageId: String
+    let name: String
+    let brand: String?
+    let category: String
+    let imageUrl: String?
+    let similarity: Double
+    let avgRating: Double
+    let reviewCount: Int
+    let sharedTags: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case beverageId = "beverage_id"
+        case name, brand, category
+        case imageUrl = "image_url"
+        case similarity
+        case avgRating = "avg_rating"
+        case reviewCount = "review_count"
+        case sharedTags = "shared_tags"
+    }
+}
+
+// MARK: - Recommendations Models (Phase 3)
+
+struct RecommendationResponse: Codable {
+    let recommendations: [RecommendedBeverage]
+    let category: String
+    let count: Int
+}
+
+struct RecommendedBeverage: Codable, Identifiable {
+    var id: String { beverageId }
+    let beverageId: String
+    let name: String
+    let brand: String?
+    let category: String
+    let matchScore: Int // 0-100
+    let reasons: [String]
+    let avgRating: Double
+    let reviewCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case beverageId, name, brand, category, reasons
+        case matchScore, avgRating, reviewCount
+    }
+}
+
+struct FeedbackRequest: Codable {
+    let beverageId: String
+    let feedbackType: String // "more_like_this", "less_like_this", "hide"
+
+    enum CodingKeys: String, CodingKey {
+        case beverageId, feedbackType
     }
 }

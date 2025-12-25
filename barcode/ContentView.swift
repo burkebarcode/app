@@ -32,11 +32,23 @@ struct ContentView: View {
                 }
                 .tag(1)
 
+            ScanBottleView()
+                .tabItem {
+                    Label("Scan", systemImage: "camera.fill")
+                }
+                .tag(2)
+
+            ForYouView()
+                .tabItem {
+                    Label("For You", systemImage: "star.fill")
+                }
+                .tag(3)
+
             //SettingsView()
             //    .tabItem {
             //        Label("Settings", systemImage: "gearshape.fill")
             //    }
-            //    .tag(3)
+            //    .tag(4)
         }
         .environmentObject(dataStore)
         .environmentObject(postsManager)

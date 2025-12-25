@@ -10,7 +10,7 @@ import SwiftUI
 struct CocktailRatingForm: View {
     @Binding var cocktailName: String
     @Binding var cocktailDetails: CocktailDetails
-    @Binding var rating: Int
+    @Binding var score: Double
     @Binding var notes: String
 
     var body: some View {
@@ -238,26 +238,8 @@ struct CocktailRatingForm: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.primary)
 
-                // Rating
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Rating")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.secondary)
-
-                    HStack {
-                        Spacer()
-                        StarRatingView(
-                            rating: rating,
-                            size: 36,
-                            interactive: true,
-                            onRatingChanged: { newRating in
-                                rating = newRating
-                            }
-                        )
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                }
+                // Score
+                ScoreSlider(score: $score)
 
                 Divider()
 

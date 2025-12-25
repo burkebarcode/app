@@ -24,6 +24,12 @@ struct MyLogView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var preselectedVenue: Venue?
     @State private var preselectedDiscoveredVenue: DiscoveredVenue?
+    @State private var prefilledDrinkName: String?
+    @State private var prefilledCategory: DrinkCategory?
+    @State private var prefilledVarietal: String?
+    @State private var prefilledWineStyle: WineStyle?
+    @State private var prefilledVintage: String?
+    @State private var prefilledRegion: String?
 
     // Convert PostResponse to Rating for display
     func toRating(_ post: PostResponse) -> Rating? {
@@ -369,8 +375,17 @@ struct MyLogView: View {
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showingAddSheet) {
-                AddRatingSheet(initialVenue: preselectedVenue, discoveredVenue: preselectedDiscoveredVenue)
-                    .environmentObject(postsManager)
+                AddRatingSheet(
+                    initialVenue: preselectedVenue,
+                    discoveredVenue: preselectedDiscoveredVenue,
+                    initialDrinkName: prefilledDrinkName,
+                    initialCategory: prefilledCategory,
+                    initialVarietal: prefilledVarietal,
+                    initialWineStyle: prefilledWineStyle,
+                    initialVintage: prefilledVintage,
+                    initialRegion: prefilledRegion
+                )
+                .environmentObject(postsManager)
             }
             .task {
                 async let posts: () = postsManager.fetchPosts()
@@ -391,6 +406,12 @@ struct MyLogView: View {
                 if shouldOpen {
                     preselectedVenue = coordinator.preselectedVenue
                     preselectedDiscoveredVenue = coordinator.preselectedVenueFromDiscovery
+                    prefilledDrinkName = coordinator.prefilledDrinkName
+                    prefilledCategory = coordinator.prefilledCategory
+                    prefilledVarietal = coordinator.prefilledVarietal
+                    prefilledWineStyle = coordinator.prefilledWineStyle
+                    prefilledVintage = coordinator.prefilledVintage
+                    prefilledRegion = coordinator.prefilledRegion
                     showingAddSheet = true
                     // Delay resetting to ensure sheet has time to present
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
