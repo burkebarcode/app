@@ -71,8 +71,8 @@ struct UserResponse: Codable {
 class APIService {
     static let shared = APIService()
 
-    let baseURL = "https://barcode-gateway.fly.dev"
-    //let baseURL = "http://localhost:9000"
+    //let baseURL = "https://barcode-gateway.fly.dev"
+    let baseURL = "http://localhost:9000"
     private let tokenManager = TokenManager.shared
     private var refreshTask: Task<Void, Never>?
 

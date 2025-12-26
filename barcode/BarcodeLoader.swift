@@ -18,6 +18,7 @@ struct BarcodeLoader: View {
     private let stagger: Double   = 0.13   // more wave-like
 
     @State private var animate = false
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         HStack(spacing: 9) {
@@ -25,7 +26,7 @@ struct BarcodeLoader: View {
                 let delay = Double(i) * stagger
 
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.black)
+                    .fill(colorScheme == .dark ? Color.white : Color.black)
                     .frame(width: widths[i], height: heights[i])
                     // Primary wave: vertical pulse
                     .scaleEffect(x: animate ? 1.00 : 0.96,

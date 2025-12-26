@@ -1021,6 +1021,17 @@ struct DrinkCollectionCard: View {
                     Text("\(collection.timesTried) tasting\(collection.timesTried == 1 ? "" : "s")")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
+
+                    // Show wine style if it's a wine
+                    if collection.category == .wine, let wineStyle = collection.latestTasting?.wineDetails?.style?.rawValue {
+                        Text("•")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        Text(wineStyle)
+                            .font(.system(size: 13))
+                            .foregroundColor(categoryColor)
+                    }
                 }
 
                 // Last tried date
@@ -1040,11 +1051,13 @@ struct DrinkCollectionCard: View {
 
             Spacer()
 
-            // Category icon + chevron
+            // Category icon (not for wines) + chevron
             VStack(spacing: 8) {
-                Image(systemName: categoryIcon)
-                    .font(.system(size: 20))
-                    .foregroundColor(categoryColor)
+                if collection.category != .wine {
+                    Image(systemName: categoryIcon)
+                        .font(.system(size: 20))
+                        .foregroundColor(categoryColor)
+                }
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .medium))
@@ -1142,6 +1155,17 @@ struct TimelineRatingCard: View {
                     Text(rating.category.rawValue)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(categoryColor)
+
+                    // Show wine style if it's a wine
+                    if rating.category == .wine, let wineStyle = rating.wineDetails?.style?.rawValue {
+                        Text("•")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
+                        Text(wineStyle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 if let venue = venue {
